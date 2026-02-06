@@ -1,3 +1,5 @@
+.idea
+
 # Prerequisites
 *.d
 
@@ -39,3 +41,4 @@
 
 # debug information files
 *.dwo
+/.idea/modules.xml
