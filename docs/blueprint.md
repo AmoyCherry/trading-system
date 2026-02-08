@@ -43,52 +43,11 @@ For every change (case study), write a 10–15 line “experiment card”:
 - Decision: keep / revert / follow-up
 
 ## Milestones
-### M0 — Skeleton + toolchain (3–5 days)
+> [plan](https://chatgpt.com/s/t_69876b75d9c881918f4d243f0db67281)
 
-#### Goal
-You can build/run all targets (even stubbed) and have CI sanity.
 
-#### Deliverables
-- CMake project (or Meson/Bazel if you prefer; CMake is simplest)
-
-- Targets compile:
-  - engine library (stub ok)
-  - lobd, gateway, exchange_sim executables (stub ok)
-  - unit_tests
-  - microbench (empty benchmark ok)
-
-- Formatting + linting config (clang-format, optional clang-tidy)
-
-- Scripts:
-  - scripts/build.sh (single entry)
-  - scripts/run_micro.sh and scripts/run_e2e.sh (placeholder)
-
-#### Exit criteria
-
-Fresh clone → build works on your machine in one command
-
-### M1 — Spec + message model + correctness harness scaffolding (1–1.5 weeks)
-
-#### Goal
-You know what “correct” means before writing fast code.
-
-#### Deliverables
-- docs/architecture.md (simple diagram + data flow)
-- docs/spec.md (or in architecture doc):
-  - order lifecycle
-  - matching rules (price-time)
-  - reject reasons (minimal)
-- Minimal command/event structs (in C++ headers)
-  - NewOrder, Cancel, Ack, Fill, Reject
-- Test scaffolding:
-  - unit test framework wired (Catch2/GoogleTest—either is fine)
-  - tests/replay/ skeleton: run a trace → produce output → hash
-
-#### Exit criteria
-At least 5 “golden” tests described (even if not all implemented yet)
-Basic determinism harness compiles
-
-> Note: This “message model” is not yet “the protocol” (details in section 6).
+- [M0 — Skeleton + toolchain (3–5 days)](https://chatgpt.com/s/t_69877fb39098819181b1971b92d7dc47)
+- [M1 — Spec + message model + correctness harness scaffolding (1–1.5 weeks)](https://chatgpt.com/s/t_69878034bb708191aa67705904dd2936)
 
 
 ```text
