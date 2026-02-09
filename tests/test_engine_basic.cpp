@@ -18,15 +18,16 @@ TEST(EngineBasic, SimpleCrossProducesFillsAndLeavesRemainder) {
   Collector out;
 
   // Resting sell: 10 @ 100
-  eng.on_new(ts::proto::NewOrder{1, ts::proto::Side::Sell, 100, 10, 0}, out);
-  // Aggressive buy: 7 @ 100
-  eng.on_new(ts::proto::NewOrder{2, ts::proto::Side::Buy,  100,  7, 0}, out);
+  eng.on_new(ts::proto::NewOrder{1, ts::proto::Side::Sell, 100, 10, 0}, std::ref(out));
+  // Events: Ack(1)
+  ASSERT_GE(out.events.size(), 1u);
+  EXPECT_TRUE(std::holds_alternative<ts::proto::OrderAck>(out.events[0]));
 
-  // Events:
-  // Ack(1), Ack(2), Fill(taker=2), Fill(maker=1)
+  // Aggressive buy: 7 @ 100
+  eng.on_new(ts::proto::NewOrder{2, ts::proto::Side::Buy,  100,  7, 0}, std::ref(out));
+  // Events: Ack(1), Ack(2), Fill(taker=2), Fill(maker=1)
   ASSERT_GE(out.events.size(), 4u);
 
-  EXPECT_TRUE(std::holds_alternative<ts::proto::OrderAck>(out.events[0]));
   EXPECT_TRUE(std::holds_alternative<ts::proto::OrderAck>(out.events[1]));
   EXPECT_TRUE(std::holds_alternative<ts::proto::Fill>(out.events[2]));
   EXPECT_TRUE(std::holds_alternative<ts::proto::Fill>(out.events[3]));
@@ -51,19 +52,20 @@ TEST(EngineBasic, SimpleCrossProducesFillsAndLeavesRemainder) {
   EXPECT_EQ(eng.order_qty(1), 3);
   EXPECT_FALSE(eng.has_order(2));
 
-  // Book should not be crossed.
   const auto bb = eng.best_bid();
+  EXPECT_FALSE(bb);
   const auto ba = eng.best_ask();
-  if (bb && ba) EXPECT_LT(*bb, *ba);
+  EXPECT_TRUE(ba);
+  EXPECT_EQ(ba.value(), 100);
 }
 
 TEST(EngineBasic, FIFOAtSamePrice) {
   ts::engine::Engine eng;
   Collector out;
 
-  eng.on_new(ts::proto::NewOrder{1, ts::proto::Side::Sell, 100, 5, 0}, out);
-  eng.on_new(ts::proto::NewOrder{2, ts::proto::Side::Sell, 100, 5, 0}, out);
-  eng.on_new(ts::proto::NewOrder{3, ts::proto::Side::Buy,  100, 6, 0}, out);
+  eng.on_new(ts::proto::NewOrder{1, ts::proto::Side::Sell, 100, 5, 0}, std::ref(out));
+  eng.on_new(ts::proto::NewOrder{2, ts::proto::Side::Sell, 100, 5, 0}, std::ref(out));
+  eng.on_new(ts::proto::NewOrder{3, ts::proto::Side::Buy,  100, 6, 0}, std::ref(out));
 
   // Find taker fills for order 3 in order; should hit maker 1 then maker 2.
   std::vector<ts::proto::OrderId> contra;
@@ -85,15 +87,30 @@ TEST(EngineBasic, CancelRemovesOrder) {
   ts::engine::Engine eng;
   Collector out;
 
-  eng.on_new(ts::proto::NewOrder{10, ts::proto::Side::Buy, 99, 1, 0}, out);
+  eng.on_new(ts::proto::NewOrder{10, ts::proto::Side::Buy, 99, 1, 0}, std::ref(out));
   EXPECT_TRUE(eng.has_order(10));
 
-  eng.on_cancel(ts::proto::Cancel{10}, out);
+  eng.on_cancel(ts::proto::Cancel{10}, std::ref(out));
   EXPECT_FALSE(eng.has_order(10));
+  bool cancel_ack = false;
+  bool saw_unknown = false;
+  for (const auto& ev : out.events) {
+    if (auto r = std::get_if<ts::proto::CancelAck>(&ev)) {
+      if (r->id == 10) {
+        cancel_ack = true;
+      }
+    }
+    if (auto r = std::get_if<ts::proto::Reject>(&ev)) {
+      if (r->id == 10 && r->reason == ts::proto::RejectReason::UnknownOrderId) {
+        saw_unknown = true;
+      }
+    }
+  }
+  EXPECT_TRUE(cancel_ack);
+  EXPECT_FALSE(saw_unknown);
 
   // Cancel again -> reject
-  eng.on_cancel(ts::proto::Cancel{10}, out);
-  bool saw_unknown = false;
+  eng.on_cancel(ts::proto::Cancel{10}, std::ref(out));
   for (const auto& ev : out.events) {
     if (auto r = std::get_if<ts::proto::Reject>(&ev)) {
       if (r->id == 10 && r->reason == ts::proto::RejectReason::UnknownOrderId) {
