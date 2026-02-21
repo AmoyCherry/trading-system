@@ -22,10 +22,11 @@ fi
 
 echo "Command: ${CMD[*]}" | tee "${RUN_DIR}/cmd.txt"
 
-# You may need permissions depending on perf_event_paranoid.
 perf stat -r 5 \
   -e cycles,instructions,branches,branch-misses,cache-references,cache-misses,context-switches,cpu-migrations \
   -- "${CMD[@]}" \
-  2> "${RUN_DIR}/perf_stat.txt"
+  &> "${RUN_DIR}/perf_stat.txt"
+
+cat "${RUN_DIR}/perf_stat.txt"
 
 echo "Saved perf to ${RUN_DIR}/perf_stat.txt"
