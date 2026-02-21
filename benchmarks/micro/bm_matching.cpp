@@ -86,6 +86,7 @@ static void BM_AddOrders(benchmark::State& state) {
     benchmark::ClobberMemory();
   }
 
+  // Custom field for perf. Measure how many orders processed per second
   state.SetItemsProcessed(state.iterations() * static_cast<std::uint64_t>(n));
 }
 BENCHMARK(BM_AddOrders)->Arg(1'000)->Arg(10'000)->Arg(50'000);
@@ -144,6 +145,7 @@ static void BM_MatchSweep(benchmark::State& state) {
 
   for (auto _ : state) {
     state.PauseTiming();
+    // todo! Be aware of destructor free within each iteration though constructor excluded
     book = ts::engine::OrderBook{};
     sink.reset();
     for (const auto& o : resting) book.on_new(o, out);

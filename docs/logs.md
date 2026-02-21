@@ -1,6 +1,13 @@
-## todo
+## Feb 21, 2026 at 11:58
 1. Understand console log of micro and perf with the highest ROI.
+   - UserCounters is custom field. Here we measure processed orders per second by `state.SetItemsProcessed`.
+   - Iterations are iteration times of tese loop `for (state)`.
+   - Time is real world elapsed time including mem latency. CPU is CPU time.
 2. Understand save files of micro and perf with the highest ROI.
+   Golden metrics:
+   - Instructions per Cycle (IPC).
+   - Cache-references / Cache-misses.
+   - Branches / Branch-misses.
 3. Can cache-misses be supported in perf_stat.txt? 
 4. Address M3 deliverables:
 ```text
