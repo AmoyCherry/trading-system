@@ -25,8 +25,6 @@ echo "Command: ${CMD[*]}" | tee "${RUN_DIR}/cmd.txt"
 perf stat -r 5 \
   -e cycles,instructions,branches,branch-misses,cache-references,cache-misses,context-switches,cpu-migrations \
   -- "${CMD[@]}" \
-  &> "${RUN_DIR}/perf_stat.txt"
-
-cat "${RUN_DIR}/perf_stat.txt"
+  | tee "${RUN_DIR}/perf_stat.txt"
 
 echo "Saved perf to ${RUN_DIR}/perf_stat.txt"
