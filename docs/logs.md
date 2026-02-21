@@ -1,3 +1,26 @@
+## todo
+1. Understand console log of micro and perf with the highest ROI.
+2. Understand save files of micro and perf with the highest ROI.
+3. Can cache-misses be supported in perf_stat.txt? 
+4. Address M3 deliverables:
+```text
+When you can do these, M3 is done:
+- ./scripts/run_micro.sh produces microbench.json
+- ./scripts/perf_stat_micro.sh BM_MatchSweep produces perf_stat.txt
+- You tag a commit: git tag v0-microbench-baseline
+- You can explain (in 60 seconds):
+    - what each benchmark measures
+    - why setup is excluded
+    - what 2 perf counters you look at first and why
+```
+5. Also save perf console log to artifacts.
+6. Tag baseline.
+
+
+## Feb 20, 2026 at 22:19
+1. Built ts on ubuntu ARM.
+2. Run micro and perf.
+
 ## Feb 8, 2026 at 21:42
 1. Implement order book;
 2. Add UTs;
