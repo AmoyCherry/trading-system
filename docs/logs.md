@@ -14,6 +14,7 @@ When you can do these, M3 is done:
     - what 2 perf counters you look at first and why
 ```
 5. Also save perf console log to artifacts.
+6. Understand why add executable first?
 6. Tag baseline.
 
 
