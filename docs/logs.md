@@ -4,11 +4,15 @@
    - Iterations are iteration times of tese loop `for (state)`.
    - Time is real world elapsed time including mem latency. CPU is CPU time.
 2. Understand save files of micro and perf with the highest ROI.
-   Golden metrics:
+   Golden metrics at application level:
+   - Orders processed per second.
+   
+   Golden metrics at Machine level:
    - Instructions per Cycle (IPC).
    - Cache-references / Cache-misses.
    - Branches / Branch-misses.
 3. Can cache-misses be supported in perf_stat.txt? 
+   Elevate `perf_event_paranoid`. Physical machine must have support.
 4. Address M3 deliverables:
 ```text
 When you can do these, M3 is done:
