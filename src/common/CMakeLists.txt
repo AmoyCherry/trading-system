@@ -2,6 +2,7 @@ add_library(ts_common)
 target_sources(ts_common PRIVATE
         protocol/messages.hpp
         protocol/wire.hpp
+        protocol/pipeline.hpp
         time/clock.cpp
         stats/percentiles.cpp
         util/affinity.cpp
