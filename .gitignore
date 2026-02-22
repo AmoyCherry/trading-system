@@ -1,3 +1,6 @@
+.idea
+artifacts
+
 # Prerequisites
 *.d
 
@@ -39,3 +42,5 @@
 
 # debug information files
 *.dwo
+/.idea/modules.xml
+/build/
