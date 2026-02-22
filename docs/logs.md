@@ -1,8 +1,16 @@
 ## Feb 21, 2026 at 11:58
 1. Understand console log of micro and perf with the highest ROI.
+   
+   perf:
    - UserCounters is custom field. Here we measure processed orders per second by `state.SetItemsProcessed`.
    - Iterations are iteration times of tese loop `for (state)`.
    - Time is real world elapsed time including mem latency. CPU is CPU time.
+   
+   bm:
+   - Mean: The arithmetic average.
+   - Median: 50% of runs were faster than this.
+   - Stddev: Standard Deviation: measures how much your results vary.
+   - CV (%): Coefficient of Variation (stddev/mean). Jitter Metric. For low-latency code, you want this under 1%.
 2. Understand save files of micro and perf with the highest ROI.
    Golden metrics at application level:
    - Orders processed per second.
@@ -21,12 +29,15 @@ When you can do these, M3 is done:
 - You tag a commit: git tag v0-microbench-baseline
 - You can explain (in 60 seconds):
     - what each benchmark measures
+        The performance of adding/canceling/matching orders. We care about processed orders ps, mean/median/stddev/cv on the application level; IPC/cache/branch on the machine level.
     - why setup is excluded
     - what 2 perf counters you look at first and why
 ```
 5. Also save perf console log to artifacts.
+   Use `COMMAND | tee PATH`
 6. Understand why add executable first?
-6. Tag baseline.
+   Define the taget so you can have a reference to add options and link libraries to the target.
+7. Tag baseline.
 
 
 ## Feb 20, 2026 at 22:19

@@ -4,6 +4,12 @@
 
 ### How do you protect invariants?
 
+### How to understand bm results?
+- Mean: The arithmetic average.
+- Median: 50% of runs were faster than this.
+- Stddev: Standard Deviation: measures how much your results vary.
+- CV (%): Coefficient of Variation (stddev/mean). Jitter Metric. For low-latency code, you want this under 1%.
+
 ### What metrics do you care about?
 Golden metrics at application level:
 - Orders processed per second.
