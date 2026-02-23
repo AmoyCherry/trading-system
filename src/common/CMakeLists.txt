@@ -4,7 +4,7 @@ target_sources(ts_common PRIVATE
         protocol/wire.hpp
         protocol/pipeline.hpp
         time/clock.cpp
-        stats/percentiles.cpp
+        stats/percentiles.hpp
         util/affinity.cpp
         util/cli.cpp
 )
