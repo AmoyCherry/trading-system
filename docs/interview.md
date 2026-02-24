@@ -25,6 +25,9 @@ Golden metrics at Machine level:
 
 #### fu - How do you improve branch-misses?
 
+### In e2e, how do you make a non-trivial stream scenario for testing?
+
+
 ## Subtle
 
 1. What is "frame pointer" in add_compile_options(-fno-omit-frame-pointer)?

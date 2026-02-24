@@ -59,8 +59,8 @@ std::vector<ClientMsg> make_scenario_add_only(std::uint64_t n) {
 
 int main(int argc, char** argv) {
   std::string scenario = "cross";
-  std::uint64_t n = 1'000'000;
-  std::uint64_t warmup = 10'000;
+  std::uint64_t n = 16'000'000;
+  std::uint64_t warmup = 100'000;
 
   // Minimal CLI
   if (argc >= 2) scenario = argv[1];
