@@ -1,12 +1,12 @@
 ## Feb 21, 2026 at 11:58
 1. Understand console log of micro and perf with the highest ROI.
    
-   perf:
-   - UserCounters is custom field. Here we measure processed orders per second by `state.SetItemsProcessed`.
+   bm:
+   - UserCounters is a custom field. Here we measure processed orders per second by `state.SetItemsProcessed`.
    - Iterations are iteration times of tese loop `for (state)`.
    - Time is real world elapsed time including mem latency. CPU is CPU time.
    
-   bm:
+   microbench:
    - Mean: The arithmetic average.
    - Median: 50% of runs were faster than this.
    - Stddev: Standard Deviation: measures how much your results vary.
