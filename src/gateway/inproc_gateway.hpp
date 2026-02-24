@@ -9,11 +9,6 @@
 #include <type_traits>
 #include <variant>
 
-namespace ts::engine {
-// todo! why there is a class Engine
-class Engine;
-}
-
 namespace ts::gw {
 
 // Returns attribution for this request
