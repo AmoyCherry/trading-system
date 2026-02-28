@@ -49,6 +49,7 @@ For every change (case study), write a 10–15 line “experiment card”:
 - [M1 — Spec + message model + correctness harness scaffolding (1–1.5 weeks)](https://chatgpt.com/s/t_69878034bb708191aa67705904dd2936)
 - [M3 — Microbench baseline + perf hooks (1–2 weeks)](https://chatgpt.com/s/t_6997ca91d8848191ae4f7dd91fdf6581)
 - [M4 — In-proc pipeline integration (1 week)](https://chatgpt.com/s/t_699a63ce0a148191a99d4f8ed44278b9)
+- [M5 — Formalize protocol + add transport backends (2 weeks)](https://chatgpt.com/s/t_699d17ddeaf88191852f19a49b0c08ac)
 
 
 ```text
