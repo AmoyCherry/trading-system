@@ -63,10 +63,12 @@ struct Frame {
 };
 
 struct Decoded {
+  // Header
   std::uint16_t version{};
   MsgType type{};
   std::uint32_t length{};
   std::uint64_t seq{};
+  // Payload
   WireMsg msg{};
 };
 
@@ -233,7 +235,7 @@ inline bool encode(const proto::Fill& m, std::uint64_t seq, Frame& out) {
   return true;
 }
 
-// Convenience: encode a WireMsg variant
+// Convenience: encode a WireMsg variant and draw the Frame
 inline bool encode(const WireMsg& msg, std::uint64_t seq, Frame& out) {
   return std::visit([&](auto&& inner) { return encode(inner, seq, out); }, msg);
 }

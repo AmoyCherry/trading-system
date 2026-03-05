@@ -39,9 +39,10 @@ Bitwise ops on Signed Integers are risky. _TODO! Shifting negative signed intege
 Use `std::memcpy`
 1. Unaligned Memory Access (Hardware level)
    When reading packets from a network byte stream, data bytes like these integers often packed tightly. This means an integer's start address may not be a multiple of 4/8.
-   - On some architectures like ARM, dereferencing an unaligned pointer can cause a hardware trap;
+   - On some architectures like ARM, dereferencing an unaligned pointer causes bus errors;
 2. Strict Aliasing Violations (Compiler level):
-   C++ has a rule called "strict aliasing," which dictates that you cannot access an object of one type through a pointer of a different, incompatible type (with `char*` and `std::byte*` being the exceptions). Casting a `std::byte*` to a `std::uint32_t` and deref it is a UB.
+   C++ has a rule called **strict aliasing** which dictates that you cannot access an object of one type through a pointer of an incompatible type (with `char*` and `std::byte*` being the exceptions). 
+   Casting a `std::byte*` to a `std::uint32_t` and deref it is a UB.
 
 But unaligned loads can significantly increase crossing cache line accesses (not the unaligned obj itself crosses cache lines, but the following aligned objs may be affected). Which cannot be sovled by `std::memcpy`. Crossing cache lines can incur performance penalty by:
 - Double Cache Misses.
