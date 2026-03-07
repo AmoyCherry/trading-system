@@ -16,6 +16,7 @@ include(GoogleTest)
 add_executable(unit_tests
         test_engine_basic.cpp
         unit/test_wire_roundtrip.cpp
+        unit/test_uds_dgram.cpp
 )
 
 # Linking ts_engine pulls in the "PUBLIC" include directories defined above

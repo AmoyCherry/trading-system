@@ -53,10 +53,14 @@ UdsDgramSocket::UdsDgramSocket(UdsDgramSocket&& o) noexcept
 
 UdsDgramSocket& UdsDgramSocket::operator=(UdsDgramSocket&& o) noexcept {
   if (this == &o) return *this;
+
+  // destruct old values
   if (fd_ >= 0) ::close(fd_);
   if (!path_.empty()) ::unlink(path_.c_str());
+
+  // move new values
   fd_ = o.fd_;
-  path_ = std::move(o.path_); // call string's move constructor
+  path_ = std::move(o.path_); // call string's move assi constructor
   o.fd_ = -1;
   return *this;
 }
