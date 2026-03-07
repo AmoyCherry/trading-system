@@ -26,7 +26,7 @@ TEST(UdsDgram, SendReceive) {
     ASSERT_EQ(a.send_to(msg, b_peer), msg.size());
 
     std::array<std::byte, 128> buf{};
-    // from will be filled wit
+    // from will be filled with sou
     Peer from{};
     const auto n = b.recv_into(buf, from);
 
