@@ -1,4 +1,6 @@
-add_library(ts_common)
+add_library(ts_common
+        transport/uds_dgram.hpp
+        transport/uds_dgram.cpp)
 target_sources(ts_common PRIVATE
         protocol/messages.hpp
         protocol/wire.hpp

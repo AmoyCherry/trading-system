@@ -1,4 +1,4 @@
-## Q&A
+## sys design Q&A
 
 ### How do you confirm the correctness of the baseline?
 
@@ -26,6 +26,34 @@ Golden metrics at Machine level:
 #### fu - How do you improve branch-misses?
 
 ### In e2e, how do you make a non-trivial stream scenario for testing?
+
+
+## Wire QA
+
+### Why `htole32` handles unsigned types?
+Endianness macros like `htole32` and `be16toh` expect unsigned types. It's implemented by bitwise shits and masks or compiler intrinsic byte-swap instructions (bswap). 
+
+Bitwise ops on Signed Integers are risky. _TODO! Shifting negative signed integers_
+
+### How do you convert between `std::byte` and `std:int_` during codec?
+Use `std::memcpy`
+1. Unaligned Memory Access (Hardware level)
+   When reading packets from a network byte stream, data bytes like these integers often packed tightly. This means an integer's start address may not be a multiple of 4/8.
+   - On some architectures like ARM, dereferencing an unaligned pointer causes bus errors;
+2. Strict Aliasing Violations (Compiler level):
+   C++ has a rule called **strict aliasing** which dictates that you cannot access an object of one type through a pointer of an incompatible type (with `char*` and `std::byte*` being the exceptions). 
+   Casting a `std::byte*` to a `std::uint32_t` and deref it is a UB.
+
+But unaligned loads can significantly increase crossing cache line accesses (not the unaligned obj itself crosses cache lines, but the following aligned objs may be affected). Which cannot be sovled by `std::memcpy`. Crossing cache lines can incur performance penalty by:
+- Double Cache Misses.
+
+The penalty is even more severe Crossing a 4KB virtual memory page.
+
+So, the gateway or network interface card (NIC) reads the packed wire format and should immediately parse it into an internal, highly aligned data structure.
+
+And we can use compiler intrinsics (like `__builtin_prefetch`) to fetch the next cache line into the L1 cache before the CPU actually needs it, when we know we are continousely handle byte stream. 
+
+So we should not use `out = *reinterpret_cast<const std::int32_t*>(p);`
 
 
 ## Subtle
