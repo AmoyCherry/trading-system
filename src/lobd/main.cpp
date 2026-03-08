@@ -42,30 +42,25 @@ int main(int argc, char** argv) {
 
     const auto seq = d->seq;
 
+    ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
+      std::visit([&](auto&& inner) {
+        ts::wire::Frame tx;
+        ts::wire::encode(inner, seq, tx);
+        sock.send_to(tx.bytes_view(), gw_peer);
+      }, ev);
+    };
+
     // Only accept client messages
     if (auto* m = std::get_if<ts::proto::NewOrder>(&d->msg)) {
-      ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
-        std::visit([&](auto&& inner) {
-          ts::wire::Frame tx;
-          ts::wire::encode(inner, seq, tx);
-          sock.send_to(tx.bytes_view(), gw_peer);
-        }, ev);
-      };
       eng.on_new(*m, out);
     } else if (auto* c = std::get_if<ts::proto::Cancel>(&d->msg)) {
-      ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
-        std::visit([&](auto&& inner) {
-          ts::wire::Frame tx;
-          ts::wire::encode(inner, seq, tx);
-          sock.send_to(tx.bytes_view(), gw_peer);
-        }, ev);
-      };
       eng.on_cancel(*c, out);
     } else {
       continue;
     }
 
     // Mark end of response for this seq
+    // Because matching may emit multiple events per imc
     {
       ts::wire::Frame endf;
       ts::wire::encode(ts::proto::ResponseEnd{}, seq, endf);

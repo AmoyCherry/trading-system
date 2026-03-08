@@ -55,6 +55,14 @@ And we can use compiler intrinsics (like `__builtin_prefetch`) to fetch the next
 
 So we should not use `out = *reinterpret_cast<const std::int32_t*>(p);`
 
+## lobd QA
+
+### Why we need ResponseEnd
+
+### Why responses keep the same seq
+
+### Using `std::signal` for RAII
+
 
 ## Subtle
 
