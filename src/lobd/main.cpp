@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
     }
 
     // Mark end of response for this seq
-    // Because matching may emit multiple events per imc
+    // Because matching may emit multiple events per imcomin
     {
       ts::wire::Frame endf;
       ts::wire::encode(ts::proto::ResponseEnd{}, seq, endf);
