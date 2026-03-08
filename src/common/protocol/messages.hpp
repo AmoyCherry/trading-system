@@ -54,4 +54,6 @@ namespace ts::proto {
         bool is_taker{false};
     };
 
+    struct ResponseEnd {};
+
 } // namespace ts::proto
