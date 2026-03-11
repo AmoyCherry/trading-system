@@ -1,3 +1,16 @@
+## What's important in interviews?
+The process of case study:
+I can 
+1. identify a realistic trading-system bottleneck (define the problem and propose a solution), 
+2. design a clean experiment around it, measure it properly, 
+4. and explain the trade-off like an engineer who could work on production systems.
+
+expert C++, low-level systems knowledge, 
+1. CPU-architecture awareness, 
+2. optimization across abstraction layers, 
+3. and judgment about latency, throughput, simplicity, maintainability, and behavior under pressure
+
+
 ## sys design Q&A
 
 ### How do you confirm the correctness of the baseline?

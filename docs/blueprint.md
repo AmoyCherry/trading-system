@@ -44,6 +44,7 @@ For every change (case study), write a 10–15 line “experiment card”:
 
 ## Milestones
 > [plan](https://chatgpt.com/s/t_69876b75d9c881918f4d243f0db67281)
+> [important signals](https://chatgpt.com/s/t_69b0cb6a57f0819190d334318bb03a22)
 
 - [M0 — Skeleton + toolchain (3–5 days)](https://chatgpt.com/s/t_69877fb39098819181b1971b92d7dc47)
 - [M1 — Spec + message model + correctness harness scaffolding (1–1.5 weeks)](https://chatgpt.com/s/t_69878034bb708191aa67705904dd2936)
