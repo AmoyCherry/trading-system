@@ -54,6 +54,6 @@ namespace ts::proto {
         bool is_taker{false};
     };
 
-    struct ResponseEnd {};
+    struct EndOfReplay {};
 
 } // namespace ts::proto

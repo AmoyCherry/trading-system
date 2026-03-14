@@ -48,13 +48,13 @@ enum class MsgType : std::uint16_t {
   CancelAck   = 4,
   Reject      = 5,
   Fill        = 6,
-  ResponseEnd = 7,
+  EndOfReplay = 7,
 };
 
 using WireMsg = std::variant<
     proto::NewOrder, proto::Cancel,
     proto::OrderAck, proto::CancelAck, proto::Reject, proto::Fill,
-    proto::ResponseEnd
+    proto::EndOfReplay
   >;
 
 struct Frame {
@@ -238,11 +238,13 @@ inline bool encode(const proto::Fill& m, std::uint64_t seq, Frame& out) {
   return true;
 }
 
-inline bool encode(const proto::ResponseEnd& m, std::uint64_t seq, Frame& out) {
-  const std::uint32_t total = static_cast<std::uint32_t>(kHeaderSize);
+inline bool encode(const proto::EndOfReplay& m, std::uint64_t seq, Frame& out) {
+  constexpr std::uint32_t payload = 0;
+  const std::uint32_t total = static_cast<std::uint32_t>(kHeaderSize + payload);
   if (total > kMaxFrameSize) return false;
 
-  write_header(out, MsgType::ResponseEnd, total, seq);
+  write_header(out, MsgType::EndOfReplay, total, seq);
+  return true;
 }
 
 // Convenience: encode a WireMsg variant and draw the Frame
@@ -326,9 +328,8 @@ inline std::optional<Decoded> decode(std::span<const std::byte> bytes) {
       d.msg = m;
       return d;
     }
-    case MsgType::ResponseEnd: {
-      proto::ResponseEnd m{};
-      d.msg = m;
+    case MsgType::EndOfReplay: {
+      d.msg = proto::EndOfReplay{};
       return d;
     }
     default:
