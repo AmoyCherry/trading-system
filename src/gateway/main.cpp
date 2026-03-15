@@ -21,45 +21,48 @@ int main(int argc, char** argv) {
     std::signal(SIGTERM, on_sig);
 
     const std::string local = arg(argc, argv, "--local", "/tmp/ts_gw.sock");
-    const std::string to_exchange = arg(argc, argv, "--to-exchange", "/tmp/ts_exch.sock");
     const std::string to_lob = arg(argc, argv, "--to-lob", "/tmp/ts_lob.sock");
 
     ts::transport::UdsDgramSocket sock(local);
-    const auto exch_peer = ts::transport::UdsDgramSocket::peer_from_path(to_exchange);
     const auto lob_peer  = ts::transport::UdsDgramSocket::peer_from_path(to_lob);
 
-    std::cout << "READY gateway local=" << local << " to_exchange=" << to_exchange
-              << " to_lob=" << to_lob << "\n" << std::flush;
+    std::cout << "READY role=gateway local=" << local << " to_lob=" << to_lob << "\n" << std::flush;
 
-    enum class State { WaitClient, WaitLob };
-    State st = State::WaitClient;
-    std::uint64_t inflight_seq = 0;
+    std::uint64_t decode_errors = 0;
+    std::uint64_t forwarded = 0;
+    std::uint64_t seq_errors = 0;
+    std::uint64_t last_seq = 0;
 
     while (!g_stop.load()) {
-        ts::wire::Frame rx;
+        ts::wire::Frame frame{};
         ts::transport::Peer from{};
-        const auto n = sock.recv_into(rx.writable(), from);
-        rx.len = static_cast<std::uint32_t>(n);
+        sock.recv_into(frame.writable(), from);
 
-        auto d = ts::wire::decode(rx.bytes_view());
-        if (!d.has_value()) continue;
-
-        if (st == State::WaitClient) {
-            // Forward client request to lob
-            inflight_seq = d->seq;
-            sock.send_to(rx.bytes_view(), lob_peer);
-            st = State::WaitLob;
+        const auto decoded = ts::wire::decode(frame.bytes_view());
+        if (!decoded.has_value()) {
+            ++decode_errors;
             continue;
         }
 
-        // WaitLob: forward all responses to exchange until ResponseEnd(seq)
-        sock.send_to(rx.bytes_view(), exch_peer);
+        if (decoded->seq != last_seq + 1) {
+            ++seq_errors;
+        }
+        last_seq = decoded->seq;
 
-        const bool is_end = std::holds_alternative<ts::proto::ResponseEnd>(d->msg);
-        if (is_end && d->seq == inflight_seq) {
-            st = State::WaitClient;
+        sock.send_to(frame.bytes_view(), lob_peer);
+        ++ forwarded;
+
+        if (std::holds_alternative<ts::proto::EndOfReplay>(decoded->msg)) {
+            break;
         }
     }
+
+    std::cout << "RESULT role=gateway"
+            << " forwarded=" << forwarded
+            << " decode_errors=" << decode_errors
+            << " seq_errors=" << seq_errors
+            << " last_seq=" << last_seq
+            << "\n";
 
     return 0;
 }
