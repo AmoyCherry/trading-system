@@ -4,6 +4,36 @@
 
 namespace ts::engine {
 
+namespace {
+
+const uint64_t kFnvOffset = 14695981039346656037ull;
+const uint64_t kFnvPrime = 1099511628211ull;
+
+inline std::uint64_t hash_byte(std::uint64_t& h, std::uint8_t v) {
+  h ^= v;
+  h *= kFnvPrime;
+}
+
+inline std::uint64_t hash_u64(std::uint64_t h, std::uint64_t v) {
+  for (int i = 0; i < 8; ++i) {
+    hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
+    v >>= 8;
+  }
+}
+
+inline std::uint64_t hash_u32(std::uint64_t& h, std::uint32_t v) {
+  for (int i = 0; i < 4; ++i) {
+    hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
+    v >>= 8;
+  }
+}
+
+inline std::int32_t hash_i32(std::uint64_t& h, std::int32_t v) {
+  hash_u32(h, static_cast<std::uint32_t>(v));
+}
+
+}
+
 proto::Qty OrderBook::order_qty(proto::OrderId id) const {
   auto it = live_.find(id);
   if (it == live_.end()) return 0;
@@ -181,4 +211,52 @@ void OrderBook::match_sell(LiveOrder& incoming, const EventSink& out) {
   }
 }
 
+BookSummary OrderBook::summary() const {
+  BookSummary s{};
+
+  s.live_orders = static_cast<std::uint64_t>(live_order_count());
+  s.best_ask = best_ask();
+  s.best_bid = best_bid();
+
+  // state: <live order size, bids, asks>
+  std::uint64_t h = kFnvOffset;
+  hash_u64(h, s.live_orders);
+
+  auto hash_orders = [&](const std::deque<proto::OrderId>& level, std::uint8_t err) {
+    for (const auto id : level) {
+      auto it = live_.find(id);
+      if (it == live_.end()) {
+        hash_u64(h, id);
+        hash_byte(h, err);
+        continue;
+      }
+
+      const auto& o = it->second;
+      hash_u64(h, o.id);
+      hash_u32(h, o.symbol);
+      hash_byte(h, static_cast<std::uint8_t>(o.side));
+      hash_i32(h, o.price);
+      hash_i32(h, o.qty);
+    }
+  };
+
+  // bids hash: 'B' + price + level size + each live order
+  hash_byte(h, static_cast<std::uint8_t>('B'));
+  for (const auto& [price, level] : bids_) {
+    hash_i32(h, price);
+    hash_u64(h, static_cast<std::uint64_t>(level.size()));
+    hash_orders(level, 0xEE);
+  }
+
+  // asks hash: 'A' + Price + level size + each live order
+  hash_byte(h, static_cast<std::uint8_t>('A'));
+  for (const auto& [price, level] : asks_) {
+    hash_i32(h, price);
+    hash_u64(h, static_cast<std::uint64_t>(level.size()));
+    hash_orders(level, 0xEF);
+  }
+  s.state_hash = h;
+
+  return s;
+}
 } // namespace ts::engine

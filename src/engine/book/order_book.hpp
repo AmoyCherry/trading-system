@@ -10,6 +10,8 @@
 #include <unordered_map>
 #include <variant>
 
+#include "book_summary.hpp"
+
 namespace ts::engine {
 
 namespace proto = ts::proto;
@@ -28,6 +30,8 @@ public:
     proto::Qty order_qty(proto::OrderId id) const;
     std::optional<proto::Price> best_bid() const;
     std::optional<proto::Price> best_ask() const;
+
+    BookSummary summary() const;
 
 private:
     struct LiveOrder {

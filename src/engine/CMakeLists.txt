@@ -1,5 +1,6 @@
 # Define library
-add_library(ts_engine)
+add_library(ts_engine
+        book_summary.hpp)
 # Add source files to the library
 target_sources(ts_engine PRIVATE
         engine.cpp
