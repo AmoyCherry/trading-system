@@ -7,6 +7,10 @@
 #include <iostream>
 #include <string>
 
+#include "book_summary.hpp"
+
+namespace {
+
 static std::atomic<bool> g_stop{false};
 static void on_sig(int) { g_stop.store(true); }
 
@@ -17,56 +21,90 @@ static std::string arg(int argc, char** argv, const std::string& name, const std
   return def;
 }
 
+struct ReplayCounters {
+  std::uint64_t acks = 0;
+  std::uint64_t cancel_acks = 0;
+  std::uint64_t fills = 0;
+  std::uint64_t rejects = 0;
+
+  std::uint64_t applied_msgs = 0;
+  std::uint64_t decode_errors = 0;
+  std::uint64_t seq_errors = 0;
+
+  void on_event(const ts::engine::Event& ev) {
+    if (std::holds_alternative<ts::proto::OrderAck>(ev)) ++acks;
+    else if (std::holds_alternative<ts::proto::CancelAck>(ev)) ++cancel_acks;
+    else if (std::holds_alternative<ts::proto::Fill>(ev)) ++fills;
+    else if (std::holds_alternative<ts::proto::Reject>(ev)) ++rejects;
+  }
+};
+
+void print_result(const ReplayCounters& ctr, const ts::engine::BookSummary& s) {
+  std::cout << "STATS role=lobd"
+           << " applied_msgs=" << ctr.applied_msgs
+           << " decode_errors=" << ctr.decode_errors
+           << " seq_errors=" << ctr.seq_errors
+           << "\n";
+
+  std::cout << "RESULT"
+            << " acks=" << ctr.acks
+            << " cancel_acks=" << ctr.cancel_acks
+            << " rejects=" << ctr.rejects
+            << " fills=" << ctr.fills
+            << " live_orders=" << s.live_orders
+            << " best_bid=" << ts::engine::price_or_na(s.best_bid)
+            << " best_ask=" << ts::engine::price_or_na(s.best_ask)
+            << " state_hash=" << s.state_hash
+            << "\n";
+}
+
+}
+
 int main(int argc, char** argv) {
   std::signal(SIGINT, on_sig);
   std::signal(SIGTERM, on_sig);
 
   const std::string local = arg(argc, argv, "--local", "/tmp/ts_lob.sock");
-  const std::string to_gateway = arg(argc, argv, "--to-gateway", "/tmp/ts_gw.sock");
-
   ts::transport::UdsDgramSocket sock(local);
-  const auto gw_peer = ts::transport::UdsDgramSocket::peer_from_path(to_gateway);
 
   ts::engine::Engine eng;
+  ReplayCounters ctr;
 
-  std::cout << "READY lobd local=" << local << " to_gateway=" << to_gateway << "\n" << std::flush;
+  std::cout << "READY lobd local=" << local << "\n" << std::flush;
 
   while (!g_stop.load()) {
-    ts::wire::Frame rx;
+    ts::wire::Frame frame;
     ts::transport::Peer from{};
-    const auto n = sock.recv_into(rx.writable(), from);
-    rx.len = static_cast<std::uint32_t>(n);
+    const auto n = sock.recv_into(frame.writable(), from);
+    frame.len = static_cast<std::uint32_t>(n);
 
-    auto d = ts::wire::decode(rx.bytes_view());
-    if (!d.has_value()) continue;
-
-    const auto seq = d->seq;
+    auto d = ts::wire::decode(frame.bytes_view());
+    if (!d.has_value()) {
+      ++ctr.decode_errors;
+      continue;
+    }
 
     ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
-      std::visit([&](auto&& inner) {
-        ts::wire::Frame tx;
-        ts::wire::encode(inner, seq, tx);
-        sock.send_to(tx.bytes_view(), gw_peer);
-      }, ev);
+      ctr.on_event(ev);
     };
 
     // Only accept client messages
     if (auto* m = std::get_if<ts::proto::NewOrder>(&d->msg)) {
+      ++ctr.applied_msgs;
       eng.on_new(*m, out);
     } else if (auto* c = std::get_if<ts::proto::Cancel>(&d->msg)) {
+      ++ctr.cancel_acks;
       eng.on_cancel(*c, out);
-    } else {
-      continue;
+    } else if (auto* e = std::get_if<ts::proto::EndOfReplay>(&d->msg)) {
+      print_result(ctr, eng.summary());
+      break;
     }
 
-    // Mark end of response for this seq
-    // Because matching may emit multiple events per incoming NewOrder or Cancel
-    {
-      ts::wire::Frame endf;
-      ts::wire::encode(ts::proto::ResponseEnd{}, seq, endf);
-      sock.send_to(endf.bytes_view(), gw_peer);
-    }
+    // unexpected msg type
+    std::cerr << "Unexpected msg type can't be handled in lob" << "\n";
+    ++ctr.decode_errors;
   }
 
+  print_result(ctr, eng.summary());
   return 0;
 }
