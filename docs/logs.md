@@ -1,3 +1,9 @@
+## Mar 21, 2026 at 23:26
+Is it a best practice to initialize all the member variables with default values in the struct definition?
+
+If a class only use RAII types, it automatically is a RAII type? And by the rule of 0, I should not implement the five special member functions for this class?
+
+
 ## Feb 21, 2026 at 11:58
 1. Understand console log of micro and perf with the highest ROI.
    

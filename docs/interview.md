@@ -55,14 +55,67 @@ And we can use compiler intrinsics (like `__builtin_prefetch`) to fetch the next
 
 So we should not use `out = *reinterpret_cast<const std::int32_t*>(p);`
 
+## Exchange
+
+### How do you construct scenarios? And why?
+
+The data in real world has specific distribution patterns, and neither totally random and concentrated near one single level.
+
+todo! long tail in real world
+> [order generation](https://chatgpt.com/s/t_69bb58da399c8191990eda0aee55dee6)
+
+For case studies, the generated orders should have:
+1. heavy mass near the top of book,
+2. some depth further out,
+3. and explicit aggressive orders that produce distinct matching regimes including:
+   1. not match,
+   2. match exactly one level,
+   3. or sweep exactly k levels.
+
+Why it's important that generated orders can replay?
+
+#### make_cross
+**Phase A: seed a realistic book**
+To construct the long-tail and heavy top scenario, seed 10–15 active levels each side. That aligns with the common practice of modeling arrival/cancellation behavior near the first 10–15 levels and gives you enough depth to test one-level and multi-level sweeps.
+
+Use a depth distribution like this:
+1. 70% of adds in levels 0–3 from the touch
+2. 25% in levels 4–10
+3. 5% in levels 11–15
+
+That exact split is a design choice, but it is motivated by the empirical near-touch concentration plus long tail.
+
+**Phase B: generate a mixed “cross” trace**
+A good default mix is:
+- 50% passive add (no match)
+- 30% one-level match
+- 20% multi-level sweep
+
+The "good" is not “the market truth” it is a good benchmark workload because it gives you coverage over the major hot paths.
+
+**Replenishment Rule**
+After each generated event, if one side drops below a minimum number of levels, insert a few passive replenishment before continuing. 
+
 ## lobd QA
-
-### Why we need ResponseEnd
-
-### Why responses keep the same seq
 
 ### Using `std::signal` for RAII
 
+### State Hash
+FNV-1a
+- fast;
+- Low Expected Collisions: The 64-bit FNV-1a boasts an extremely low collision rate, approximately 2^(-64)
+
+FNV-1a is sequential: each byte updates the running state, so changing byte order changes intermediate states and therefore the final hash.
+So if you change any of these, hash changes:
+
+reorder bids/asks traversal,
+reorder orders inside a level,
+reorder fields within an order,
+switch byte endianness.
+That is also why this works as a **deterministic fingerprint: stable input order gives stable hash**.
+
+
+difference between `ReplayCounters ctr;` and `ReplayCounters ctr{};`
 
 ## Subtle
 
