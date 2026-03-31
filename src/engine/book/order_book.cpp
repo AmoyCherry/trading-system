@@ -1,6 +1,7 @@
 #include "book/order_book.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace ts::engine {
 
@@ -259,4 +260,59 @@ BookSummary OrderBook::summary() const {
 
   return s;
 }
+
+std::uint32_t OrderBook::active_levels(proto::Side side) const {
+  return side == proto::Side::Buy ? bids_.size() : asks_.size();
+}
+
+std::vector<proto::OrderId> OrderBook::order_ids_at_price(proto::Side side, proto::Price price) const {
+  std::vector<proto::OrderId> out;
+
+  auto collect = [&](const auto& levels) {
+    auto it = levels.find(price);
+    if (it == levels.end()) return;
+    // NOTE!
+    out.reserve(it->second.size());
+    for (const proto::OrderId id : it->second) {
+      // NOTE!
+      if (live_.find(id) != live_.end()) {
+        out.push_back(id);
+      }
+    }
+  };
+  side == proto::Side::Buy ? collect(bids_) : collect(asks_);
+
+  return out;
+}
+
+std::vector<OrderBook::LevelStates> OrderBook::level_stats(proto::Side side, std::size_t limit = std::numeric_limits<std::size_t>::max()) const {
+  std::vector<LevelStates> out;
+
+  auto collect = [&](auto&& levels) {
+    std::size_t n =  std::min(static_cast<std::size_t>(levels.size()), limit);
+    out.reserve(n);
+
+    std::size_t count = 0;
+    for (const auto& [px, level] : levels) {
+      proto::Qty level_qty = 0;
+      std::size_t active_order = 0;
+      for (const auto& id : level) {
+        auto it = live_.find(id);
+        if (it == live_.end()) continue;
+        level_qty += it->second.qty;
+        ++active_order;
+      }
+
+      out.push_back({px, level_qty, active_order});
+
+      if (++count == n) break;
+    }
+
+    return out;
+  };
+  side == proto::Side::Buy ? collect(bids_) : collect(asks_);
+
+  return out;
+}
+
 } // namespace ts::engine

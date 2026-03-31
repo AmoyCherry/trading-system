@@ -33,6 +33,17 @@ public:
 
     BookSummary summary() const;
 
+    // observer
+    struct LevelStates {
+        proto::Price price{};
+        proto::Qty qty{};
+        std::size_t order_count{};
+    };
+
+    std::uint32_t active_levels(proto::Side side) const;
+    std::vector<proto::OrderId> order_ids_at_price(proto::Side side, proto::Price price) const;
+    std::vector<LevelStates> level_stats(proto::Side side, std::size_t limit) const;
+
 private:
     struct LiveOrder {
         proto::OrderId id{};
