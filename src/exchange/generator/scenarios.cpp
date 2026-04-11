@@ -122,6 +122,46 @@ proto::Price inside_spread_price(const engine::OrderBook& book,
     return clamp_price(*ba - p.tick);
 }
 
+int sample_depth_near_touch(std::mt19937_64& rng, int max_depth) {
+    max_depth = std::max(0, max_depth);
+    if (max_depth == 0) return 0;
+
+    const double u = uniform01(rng);
+    if (u < 0.7) {
+        return uniform_int<int>(rng, 0, std::min(3, max_depth));
+    }
+    if (u < 0.95) {
+        const int lo = std::min(4, max_depth);
+        const int hi = std::max(10, max_depth);
+        return uniform_int<int>(rng, lo, std::max(lo, hi));
+    }
+
+    const int lo = std::min(11, max_depth);
+    return uniform_int<int>(rng, lo, std::max(lo, max_depth));
+}
+
+proto::Price passive_price(const engine::OrderBook& book, proto::Side side, int ticks_from_touch, const ScenarioParams& params) {
+    ticks_from_touch = std::max(0, ticks_from_touch);
+
+    if (side == proto::Side::Buy) {
+        if (const auto bb = book.best_bid()) {
+            return clamp_price(*bb - ticks_from_touch * params.tick);
+        }
+        if (const auto ba = book.best_ask()) {
+            return clamp_price(*ba - (params.half_spread_tick + ticks_from_touch + 1) * params.tick);
+        }
+        return clamp_price(params.mid_price - (params.half_spread_tick + ticks_from_touch) * params.tick);
+    }
+
+    if (const auto ba = book.best_ask()) {
+        return clamp_price(*ba + ticks_from_touch * params.tick);
+    }
+    if (const auto bb = book.best_bid()) {
+        return clamp_price(*bb + (params.half_spread_tick + ticks_from_touch + 1) * params.tick);
+    }
+    return clamp_price(params.mid_price + (params.half_spread_tick + ticks_from_touch) * params.tick);
+}
+
 void emit_passive_add(
     engine::OrderBook& book,
     std::vector<proto::ClientMsg>& out,
@@ -142,7 +182,8 @@ void emit_passive_add(
         bernoulli(rng, params.p_inside_spread)) {
         px = inside_spread_price(book, side, params);
     } else {
-
+        const int depth = sample_depth_near_touch(rng, params.max_depth_from_touch);
+        px = passive_price(book, side, depth, params);
     }
 
     emit_msg(proto::NewOrder{next_id++, side, px, sample_qty(rng, params), params.symbol}, book, out);
