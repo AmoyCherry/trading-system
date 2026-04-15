@@ -35,7 +35,7 @@ struct ScenarioParams {
     double p_passive = 0.50;
     double p_one_level = 0.30;
     double p_sweep = 0.20;
-    double max_sweep_levels = min_levels_per_side - 1;
+    uint32_t max_sweep_levels = min_levels_per_side - 1;
 
     proto::Price half_spread_tick = 1;
 };

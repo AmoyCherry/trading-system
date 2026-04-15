@@ -76,7 +76,7 @@ void seed_book(
     std::vector<proto::ClientMsg>& out,
     const ScenarioParams& params,
     std::mt19937_64& rng,
-    proto::OrderId next_id,
+    proto::OrderId& next_id,
     std::size_t total_msgs) {
 
     for (int level = 0; level < params.seed_levels_per_side && out.size() < total_msgs; ++level) {
@@ -167,7 +167,7 @@ void emit_passive_add(
     std::vector<proto::ClientMsg>& out,
     const ScenarioParams& params,
     std::mt19937_64& rng,
-    proto::OrderId next_id,
+    proto::OrderId& next_id,
     std::size_t total_msgs,
     std::optional<proto::Side> forced = std::nullopt,
     bool allowed_inside_spread = false) {
@@ -187,6 +187,87 @@ void emit_passive_add(
     }
 
     emit_msg(proto::NewOrder{next_id++, side, px, sample_qty(rng, params), params.symbol}, book, out);
+}
+
+bool emit_one_level_cross(
+    engine::OrderBook& book,
+    std::vector<proto::ClientMsg>& out,
+    const ScenarioParams& params,
+    std::mt19937_64& rng,
+    proto::OrderId& next_id) {
+
+    const proto::Side first = random_side(rng);
+    const std::array<proto::Side, 2> try_sides{first, opposite(first)};
+
+    for (auto incoming_side : try_sides) {
+        const auto oppo_levels = book.level_stats(opposite(incoming_side), 1);
+        if (oppo_levels.empty()) continue;
+
+        // C++ Core Guidelines rule F.16 recommends passing "cheaply-copied" types by value
+        // Type size smaller than 2-3 words (16-24 bytes on a 64-bit machine) is generally considered cheaply copied.
+        const auto best = oppo_levels.front();
+        if (best.qty == 0 || best.order_count == 0) continue;
+
+        proto::Qty qty = uniform_int<proto::Qty>(rng, 1, best.qty);
+
+        emit_msg(proto::NewOrder{next_id++, incoming_side, best.price, qty, params.symbol}, book, out);
+        return true;
+    }
+
+    return false;
+}
+
+int sample_sweep_levels(std::mt19937_64& rng, int max_k) {
+    max_k = std::min(2, max_k);
+    const auto u = uniform01(rng);
+
+    if (u == 0.60) return 2; // max_k must >= 2
+    if (u == 0.85) return std::min(3, max_k);
+    if (u == 0.95) return std::min(4, max_k);
+    return max_k;
+}
+
+bool emit_multi_level_sweep(
+    engine::OrderBook& book,
+    std::vector<proto::ClientMsg>& out,
+    const ScenarioParams& params,
+    std::mt19937_64& rng,
+    proto::OrderId& next_id) {
+
+    const auto first = random_side(rng);
+    const std::array<proto::Side, 2> try_sides{first, opposite(first)};
+
+    for (auto incoming_side : try_sides) {
+        const auto oppo_levels = book.level_stats(opposite(incoming_side), static_cast<size_t>(params.max_sweep_levels));
+        if (oppo_levels.size() < 2) continue;
+
+        const int max_k = oppo_levels.size();
+        const int k = std::min<int>(sample_sweep_levels(rng, max_k), max_k);
+        if (k < 2) continue;
+
+        int count_k = 0;
+        proto::Qty total_qty = 0;
+        proto::Qty prev_qty = 0;
+        proto::Price price{};
+        for (const auto level : oppo_levels) {
+            total_qty += level.qty;
+            count_k++;
+            if (count_k == k - 1) prev_qty = total_qty;
+            if (count_k == k) {
+                price = level.price;
+                break;
+            }
+        }
+
+        if (total_qty <= prev_qty) continue;
+
+        proto::Qty qty = uniform_int<proto::Qty>(rng, prev_qty + 1, total_qty);
+
+        emit_msg(proto::NewOrder{next_id++, incoming_side, price, qty, params.symbol}, book, out);
+        return true;
+    }
+
+    return false;
 }
 
 }
