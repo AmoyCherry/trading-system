@@ -320,7 +320,7 @@ void replenish_if_needed(
     const auto buy_lvls = book.active_levels(proto::Side::Buy);
     const auto sell_lvls = book.active_levels(proto::Side::Sell);
 
-    // If both two side need to replenish, randomly choose one side to avoid always choosing one fixe
+    // If both two side need to replenish, randomly choose one side to avoid always choosing one fixed side
     if (buy_lvls < params.min_levels_per_side && sell_lvls < params.min_levels_per_side) {
         emit_passive_add(book, out, params, rng, next_id, random_side(rng), false);
         return;
