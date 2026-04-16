@@ -168,7 +168,6 @@ void emit_passive_add(
     const ScenarioParams& params,
     std::mt19937_64& rng,
     proto::OrderId& next_id,
-    std::size_t total_msgs,
     std::optional<proto::Side> forced = std::nullopt,
     bool allowed_inside_spread = false) {
 
@@ -308,6 +307,32 @@ bool emit_cancel_near_touch(
         return true;
     }
     return false;
+}
+
+// replenish one side to be larger than min levels
+void replenish_if_needed(
+    engine::OrderBook& book,
+    std::vector<proto::ClientMsg>& out,
+    const ScenarioParams& params,
+    std::mt19937_64& rng,
+    proto::OrderId& next_id) {
+
+    const auto buy_lvls = book.active_levels(proto::Side::Buy);
+    const auto sell_lvls = book.active_levels(proto::Side::Sell);
+
+    // If both two side need to replenish, randomly choose one side to avoid always choos
+    if (buy_lvls < params.min_levels_per_side && sell_lvls < params.min_levels_per_side) {
+        emit_passive_add(book, out, params, rng, next_id, random_side(rng), false);
+        return;
+    }
+
+    if (buy_lvls < params.min_levels_per_side) {
+        emit_passive_add(book, out, params, rng, next_id, proto::Side::Buy, false);
+    }
+
+    if (sell_lvls < params.min_levels_per_side) {
+        emit_passive_add(book, out, params, rng, next_id, proto::Side::Sell, false);
+    }
 }
 
 }
