@@ -200,7 +200,7 @@ bool emit_one_level_cross(
     const std::array<proto::Side, 2> try_sides{first, opposite(first)};
 
     for (auto incoming_side : try_sides) {
-        const auto oppo_levels = book.level_stats(opposite(incoming_side), 1);
+        const auto& oppo_levels = book.level_stats(opposite(incoming_side), 1);
         if (oppo_levels.empty()) continue;
 
         // C++ Core Guidelines rule F.16 recommends passing "cheaply-copied" types by value
@@ -218,8 +218,8 @@ bool emit_one_level_cross(
 }
 
 int sample_sweep_levels(std::mt19937_64& rng, int max_k) {
-    max_k = std::min(2, max_k);
-    const auto u = uniform01(rng);
+    max_k = std::max(2, max_k);
+    const double u = uniform01(rng);
 
     if (u == 0.60) return 2; // max_k must >= 2
     if (u == 0.85) return std::min(3, max_k);
@@ -238,7 +238,7 @@ bool emit_multi_level_sweep(
     const std::array<proto::Side, 2> try_sides{first, opposite(first)};
 
     for (auto incoming_side : try_sides) {
-        const auto oppo_levels = book.level_stats(opposite(incoming_side), static_cast<size_t>(params.max_sweep_levels));
+        const auto& oppo_levels = book.level_stats(opposite(incoming_side), static_cast<size_t>(params.max_sweep_levels));
         if (oppo_levels.size() < 2) continue;
 
         const int max_k = oppo_levels.size();
@@ -267,6 +267,46 @@ bool emit_multi_level_sweep(
         return true;
     }
 
+    return false;
+}
+
+std::size_t sample_cancel_level(std::mt19937_64& rng, std::size_t max_level) {
+    const double u = uniform01(rng);
+
+    if (u < 0.7) return uniform_int<std::size_t>(rng, 0, std::min<std::size_t>(1, max_level));
+    if (u < 0.95) return uniform_int<std::size_t>(rng, 0, std::min<std::size_t>(4, max_level));
+    return uniform_int<std::size_t>(rng, 0,max_level);
+}
+
+std::optional<proto::OrderId> sample_order_id(std::mt19937_64& rng, engine::OrderBook& book, proto::Side side, proto::Price px) {
+    const auto& ids = book.order_ids_at_price(side, px);
+    if (ids.empty()) return std::nullopt;
+    const std::size_t u = uniform_int<std::size_t>(rng, 0, ids.size() - 1);
+    return ids[u];
+}
+
+bool emit_cancel_near_touch(
+    engine::OrderBook& book,
+    std::vector<proto::ClientMsg>& out,
+    const ScenarioParams& params,
+    std::mt19937_64& rng) {
+
+    const auto first = random_side(rng);
+    const std::array<proto::Side, 2> try_sides{first, opposite(first)};
+
+    for (auto side: try_sides) {
+        const auto& levels = book.level_stats(side, params.min_levels_per_side);
+        if (levels.empty()) continue;
+
+        const auto can_level = sample_cancel_level(rng, levels.size() - 1);
+        if (can_level >= levels.size()) continue;
+        proto::Price can_px = levels[can_level].price;
+        auto can_id = sample_order_id(rng, book, side, can_px);
+        if (!can_id) continue;
+
+        emit_msg(proto::Cancel{*can_id}, book, out);
+        return true;
+    }
     return false;
 }
 
