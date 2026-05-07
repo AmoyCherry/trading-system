@@ -1,10 +1,16 @@
 
-#include <vector>
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <random>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 #include "scenarios.hpp"
 
-#include <stdexcept>
 
 namespace ts::gen {
 
@@ -71,6 +77,20 @@ void emit_msg(proto::Cancel msg, engine::OrderBook& book, std::vector<proto::Cli
     book.on_cancel(msg, NoopSink);
 }
 
+bool can_place_inside(const engine::OrderBook& book, const ScenarioParams& params) {
+    auto bd = book.best_bid();
+    auto ba = book.best_ask();
+    if (ba && bd) {
+        return *ba - *bd >= 2 * params.tick;
+    }
+    return false;
+}
+
+// keep generated price valid even when mid_price - spread would fall below 1
+proto::Price clamp_price(proto::Price px) {
+    return std::max<proto::Price>(1, px);
+}
+
 void seed_book(
     engine::OrderBook& book,
     std::vector<proto::ClientMsg>& out,
@@ -80,31 +100,19 @@ void seed_book(
     std::size_t total_msgs) {
 
     for (int level = 0; level < params.seed_levels_per_side && out.size() < total_msgs; ++level) {
-        proto::Price bid_price = params.mid_price - (params.half_spread_tick + level) * params.tick;
-        proto::Price ask_price = params.mid_price + (params.half_spread_tick + level) * params.tick;
+        proto::Price bid_price = clamp_price(params.mid_price - (params.half_spread_tick + level) * params.tick);
+        proto::Price ask_price = clamp_price(params.mid_price + (params.half_spread_tick + level) * params.tick);
 
         for (int j = 0; j < params.seed_orders_per_level && out.size() < total_msgs; ++j) {
             emit_msg(proto::NewOrder{next_id++, proto::Side::Buy, bid_price, sample_qty(rng, params), params.symbol},
                 book, out);
 
+            if (out.size() >= total_msgs) break;
+
             emit_msg(proto::NewOrder{next_id++, proto::Side::Sell, ask_price, sample_qty(rng, params), params.symbol},
                 book, out);
         }
     }
-}
-
-bool can_place_inside(engine::OrderBook& book, const ScenarioParams& params) {
-    auto bd = book.best_bid();
-    auto ba = book.best_ask();
-    if (ba && bd) {
-        return *ba - *bd >= 2 * params.tick;
-    }
-    return false;
-}
-
-// todo! why I need this?
-proto::Price clamp_price(proto::Price px) {
-    return std::max<proto::Price>(1, px);
 }
 
 proto::Price inside_spread_price(const engine::OrderBook& book,
@@ -132,7 +140,7 @@ int sample_depth_near_touch(std::mt19937_64& rng, int max_depth) {
     }
     if (u < 0.95) {
         const int lo = std::min(4, max_depth);
-        const int hi = std::max(10, max_depth);
+        const int hi = std::min(10, max_depth);
         return uniform_int<int>(rng, lo, std::max(lo, hi));
     }
 
@@ -220,9 +228,9 @@ int sample_sweep_levels(std::mt19937_64& rng, int max_k) {
     max_k = std::max(2, max_k);
     const double u = uniform01(rng);
 
-    if (u == 0.60) return 2; // max_k must >= 2
-    if (u == 0.85) return std::min(3, max_k);
-    if (u == 0.95) return std::min(4, max_k);
+    if (u < 0.60) return 2; // max_k must >= 2
+    if (u < 0.85) return std::min(3, max_k);
+    if (u < 0.95) return std::min(4, max_k);
     return max_k;
 }
 
@@ -245,10 +253,10 @@ bool emit_multi_level_sweep(
         if (k < 2) continue;
 
         int count_k = 0;
-        proto::Qty total_qty = 0;
-        proto::Qty prev_qty = 0;
+        std::int64_t total_qty = 0;
+        std::int64_t prev_qty = 0;
         proto::Price price{};
-        for (const auto level : oppo_levels) {
+        for (const auto level : oppo_levels) { // LevelStates is smaller than 16B, passing by value
             total_qty += level.qty;
             count_k++;
             if (count_k == k - 1) prev_qty = total_qty;
@@ -260,7 +268,7 @@ bool emit_multi_level_sweep(
 
         if (total_qty <= prev_qty) continue;
 
-        proto::Qty qty = uniform_int<proto::Qty>(rng, prev_qty + 1, total_qty);
+        const auto qty = static_cast<proto::Qty>(uniform_int<std::int64_t>(rng, prev_qty + 1, total_qty));
 
         emit_msg(proto::NewOrder{next_id++, incoming_side, price, qty, params.symbol}, book, out);
         return true;
@@ -274,7 +282,7 @@ std::size_t sample_cancel_level(std::mt19937_64& rng, std::size_t max_level) {
 
     if (u < 0.7) return uniform_int<std::size_t>(rng, 0, std::min<std::size_t>(1, max_level));
     if (u < 0.95) return uniform_int<std::size_t>(rng, 0, std::min<std::size_t>(4, max_level));
-    return uniform_int<std::size_t>(rng, 0,max_level);
+    return uniform_int<std::size_t>(rng, 0, max_level);
 }
 
 std::optional<proto::OrderId> sample_order_id(std::mt19937_64& rng, engine::OrderBook& book, proto::Side side, proto::Price px) {
@@ -287,14 +295,13 @@ std::optional<proto::OrderId> sample_order_id(std::mt19937_64& rng, engine::Orde
 bool emit_cancel_near_touch(
     engine::OrderBook& book,
     std::vector<proto::ClientMsg>& out,
-    const ScenarioParams& params,
     std::mt19937_64& rng) {
 
     const auto first = random_side(rng);
     const std::array<proto::Side, 2> try_sides{first, opposite(first)};
 
     for (auto side: try_sides) {
-        const auto& levels = book.level_stats(side, params.min_levels_per_side);
+        const auto& levels = book.level_stats(side, std::min<std::size_t>(10, book.active_levels(side)));
         if (levels.empty()) continue;
 
         const auto can_level = sample_cancel_level(rng, levels.size() - 1);
@@ -309,7 +316,6 @@ bool emit_cancel_near_touch(
     return false;
 }
 
-// replenish one side to be larger than min levels
 void replenish_if_needed(
     engine::OrderBook& book,
     std::vector<proto::ClientMsg>& out,
@@ -320,7 +326,7 @@ void replenish_if_needed(
     const auto buy_lvls = book.active_levels(proto::Side::Buy);
     const auto sell_lvls = book.active_levels(proto::Side::Sell);
 
-    // If both two side need to replenish, randomly choose one side to avoid always choosing one fixed side
+    // If both two sides need to replenish, randomly choose one side to avoid always choosing one fixed side
     if (buy_lvls < params.min_levels_per_side && sell_lvls < params.min_levels_per_side) {
         emit_passive_add(book, out, params, rng, next_id, random_side(rng), false);
         return;
@@ -328,17 +334,162 @@ void replenish_if_needed(
 
     if (buy_lvls < params.min_levels_per_side) {
         emit_passive_add(book, out, params, rng, next_id, proto::Side::Buy, false);
+        return;
     }
 
     if (sell_lvls < params.min_levels_per_side) {
         emit_passive_add(book, out, params, rng, next_id, proto::Side::Sell, false);
+        return;
     }
 }
 
 }
 
+// ============================= CRTP =============================
+
+void CrossGenerator::generate_impl(std::size_t total_msgs_, const ScenarioParams& params_, std::mt19937_64& rng) {
+    seed_book(book, out, params_, rng, next_id, total_msgs_);
+
+    while (out.size() < total_msgs_) {
+        std::size_t before = out.size();
+        replenish_if_needed(book, out, params_, rng, next_id);
+        if (out.size() != before) continue;
+
+        const double u = uniform01(rng);
+        if (u < params_.p_passive) {
+            emit_passive_add(book, out, params_, rng, next_id, std::nullopt, false);
+        } else if (u < params_.p_passive + params_.p_one_level) {
+            if (!emit_one_level_cross(book, out, params_, rng, next_id)) {
+                emit_passive_add(book, out, params_, rng, next_id, std::nullopt, false);
+            }
+        }
+        else {
+            if (!emit_multi_level_sweep(book, out, params_, rng, next_id)) {
+                if (!emit_one_level_cross(book, out, params_, rng, next_id)) {
+                    emit_passive_add(book, out, params_, rng, next_id, std::nullopt, false);
+                }
+            }
+        }
+    }
 }
 
-std::vector<ts::proto::ClientMsg> ts::gen::CrossGenerator::generate_impl() {
+void AddOnlyGenerator::generate_impl(std::size_t total_msgs_, const ScenarioParams& params_, std::mt19937_64& rng) {
+    ScenarioParams seed_params = params_;
+    seed_params.seed_levels_per_side = std::min(static_cast<uint32_t>(2), seed_params.seed_levels_per_side);
+    seed_params.seed_orders_per_level = 1;
+    seed_book(book, out, seed_params, rng, next_id, total_msgs_);
+
+    while (out.size() < total_msgs_) {
+        // In this scenario we don't care if any side is small
+        emit_passive_add(book, out, params_, rng, next_id, std::nullopt, true);
+    }
+}
+
+void CancelHeavyGenerator::generate_impl(std::size_t total_msgs_, const ScenarioParams& params_, std::mt19937_64& rng) {
+    seed_book(book, out, params_, rng, next_id, total_msgs_);
+
+    while (out.size() < total_msgs_) {
+        std::size_t before = out.size();
+        replenish_if_needed(book, out, params_, rng, next_id);
+        if (out.size() != before) continue;
+
+        if (bernoulli(rng, params_.p_cancel) && book.live_order_count() > 0) {
+            if (!emit_cancel_near_touch(book, out, rng)) {
+                emit_passive_add(book, out, params_, rng, next_id, std::nullopt, false);
+            }
+        } else {
+            emit_passive_add(book, out, params_, rng, next_id, std::nullopt, false);
+        }
+    }
+}
+
+// ============================= plain function =============================
+
+std::vector<proto::ClientMsg> make_cross(std::size_t total_msg, const ScenarioParams& params) {
+    std::vector<proto::ClientMsg> out{};
+    if (total_msg == 0) return out;
+    out.reserve(total_msg);
+
+    engine::OrderBook book{};
+
+    std::mt19937_64 rng(params.seed);
+    proto::OrderId next_id = 1;
+
+    seed_book(book, out, params, rng, next_id, total_msg);
+
+    while (out.size() < total_msg) {
+        std::size_t before = out.size();
+        replenish_if_needed(book, out, params, rng, next_id);
+        if (out.size() != before) continue;
+
+        const double u = uniform01(rng);
+        if (u < params.p_passive) {
+            emit_passive_add(book, out, params, rng, next_id, std::nullopt, false);
+        } else if (u < params.p_passive + params.p_one_level) {
+            if (!emit_one_level_cross(book, out, params, rng, next_id)) {
+                emit_passive_add(book, out, params, rng, next_id, std::nullopt, false);
+            }
+        } else {
+            if (!emit_multi_level_sweep(book, out, params, rng, next_id)) {
+                if (!emit_one_level_cross(book, out, params, rng, next_id)) {
+                    emit_passive_add(book, out, params, rng, next_id, std::nullopt, false);
+                }
+            }
+        }
+    }
+
+    return out;
+}
+
+std::vector<proto::ClientMsg> make_add_only(std::size_t total_msg, const ScenarioParams& params) {
+    std::vector<proto::ClientMsg> out{};
+    if (total_msg == 0) return out;
+    out.reserve(total_msg);
+
+    engine::OrderBook book{};
+
+    std::mt19937_64 rng(params.seed);
+    proto::OrderId next_id = 1;
+
+    ScenarioParams seed_params = params;
+    seed_params.seed_levels_per_side = std::min(static_cast<uint32_t>(2), seed_params.seed_levels_per_side);
+    seed_params.seed_orders_per_level = 1;
+    seed_book(book, out, seed_params, rng, next_id, total_msg);
+
+    while (out.size() < total_msg) {
+        emit_passive_add(book, out, params, rng, next_id, std::nullopt, true);
+    }
+
+    return out;
+}
+
+std::vector<proto::ClientMsg> make_cancel_heavy(std::size_t total_msg, const ScenarioParams& params) {
+    std::vector<proto::ClientMsg> out{};
+    if (total_msg == 0) return out;
+    out.reserve(total_msg);
+
+    engine::OrderBook book{};
+
+    std::mt19937_64 rng(params.seed);
+    proto::OrderId next_id = 1;
+
+    seed_book(book, out, params, rng, next_id, total_msg);
+
+    while (out.size() < total_msg) {
+        std::size_t before = out.size();
+        replenish_if_needed(book, out, params, rng, next_id);
+        if (out.size() != before) continue;
+
+        if (bernoulli(rng, params.p_cancel) && book.live_order_count() > 0) {
+            if (!emit_cancel_near_touch(book, out, rng)) {
+                emit_passive_add(book, out, params, rng, next_id, std::nullopt, false);
+            }
+        } else {
+            emit_passive_add(book, out, params, rng, next_id, std::nullopt, false);
+        }
+    }
+
+    return out;
+}
 
 }
