@@ -1,12 +1,16 @@
-# Define library
-add_library(ts_engine
-        book_summary.hpp)
+# Define a library target
+add_library(ts_engine)
 # Add source files to the library
-target_sources(ts_engine PRIVATE
-        engine.cpp
+target_sources(ts_engine PUBLIC
+        # Compiler doesnt compile headers directly; hpp files get pulled via #include from cpp files
+        # So listing hpp files just cosmetic
         engine.hpp
+        engine.cpp
+        book_summary.hpp
+        book/order_book.hpp
         book/order_book.cpp
 )
+
 # Export the library
 target_include_directories(ts_engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
