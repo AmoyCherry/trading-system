@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "book_summary.hpp"
+#include "../book_summary.hpp"
 
 namespace ts::engine {
 

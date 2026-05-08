@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <iostream>
 
-#include "scenario/scenarios.hpp"
+#include "generator/scenarios.hpp"
 #include "transport/uds_dgram.hpp"
 #include "time/clock.hpp"
 #include "protocol/wire.hpp"
@@ -31,8 +31,8 @@ int main(int argc, char** argv) {
     const std::string scenario_name = arg(argc, argv, "--scenario", "cross");
     const std::uint64_t n = arg_u64(argc, argv, "--n", 200'000);
 
-    const auto kind = ts::scenario::parse_kind(scenario_name);
-    const auto stream = ts::scenario::make(kind, n);
+    const auto kind = ts::gen::parse_kind(scenario_name);
+    const auto& stream = ts::gen::make(kind, n);
 
     ts::transport::UdsDgramSocket sock(local);
     const auto peer = ts::transport::UdsDgramSocket::peer_from_path(local);
@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
     const auto throughput = seconds > 0.0 ? (static_cast<double>(total_msgs) / seconds) : 0.0;
 
     std::cout << "RESULT role=exchange"
-            << " scenario=" << ts::scenario::to_string(kind)
+            << " scenario=" << ts::gen::to_string(kind)
             << " scenario_units=" << n
             << " total_msgs=" << total_msgs
             << " send_elapsed_ns=" << (t1 - t0)
