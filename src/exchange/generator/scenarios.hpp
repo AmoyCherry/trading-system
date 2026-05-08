@@ -2,12 +2,23 @@
 
 #include <cstdint>
 #include <vector>
+#include <random>
 
 #include "../../engine/engine.hpp"
 #include "protocol/pipeline.hpp"
 
 
 namespace ts::gen {
+
+enum class Kind {
+    AddOnly,
+    Cross,
+    CancelHeavy,
+};
+
+Kind parse_kind(std::string_view s);
+std::string_view to_string(Kind k);
+std::vector<ts::proto::ClientMsg> make(Kind kind, std::uint64_t n);
 
 namespace proto = ts::proto;
 

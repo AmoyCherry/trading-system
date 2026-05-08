@@ -345,6 +345,22 @@ void replenish_if_needed(
 
 }
 
+Kind parse_kind(std::string_view s) {
+    if (s == "add" || s == "add_only") return Kind::AddOnly;
+    if (s == "cross") return Kind::Cross;
+    if (s == "cancel" || s == "cancel_heavy") return Kind::CancelHeavy;
+    throw std::invalid_argument("unknown scenario: " + std::string(s));
+}
+
+std::string_view to_string(Kind k) {
+    switch (k) {
+        case Kind::AddOnly:     return "add_only";
+        case Kind::Cross:       return "cross";
+        case Kind::CancelHeavy: return "cancel_heavy";
+    }
+    return "unknown";
+}
+
 // ============================= CRTP =============================
 
 void CrossGenerator::generate_impl(std::size_t total_msgs_, const ScenarioParams& params_, std::mt19937_64& rng) {
@@ -490,6 +506,15 @@ std::vector<proto::ClientMsg> make_cancel_heavy(std::size_t total_msg, const Sce
     }
 
     return out;
+}
+
+std::vector<proto::ClientMsg> make(Kind kind, std::uint64_t n) {
+    switch (kind) {
+        case Kind::AddOnly:     return make_add_only(n, ScenarioParams{});
+        case Kind::Cross:       return make_cross(n, ScenarioParams{});
+        case Kind::CancelHeavy: return make_cancel_heavy(n, ScenarioParams{});
+    }
+    throw std::invalid_argument("unsupported scenario kind");
 }
 
 }
