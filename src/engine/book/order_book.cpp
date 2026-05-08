@@ -10,26 +10,26 @@ namespace {
 const uint64_t kFnvOffset = 14695981039346656037ull;
 const uint64_t kFnvPrime = 1099511628211ull;
 
-inline std::uint64_t hash_byte(std::uint64_t& h, std::uint8_t v) {
+inline void hash_byte(std::uint64_t& h, std::uint8_t v) {
   h ^= v;
   h *= kFnvPrime;
 }
 
-inline std::uint64_t hash_u64(std::uint64_t h, std::uint64_t v) {
+inline void hash_u64(std::uint64_t& h, std::uint64_t v) {
   for (int i = 0; i < 8; ++i) {
     hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
     v >>= 8;
   }
 }
 
-inline std::uint64_t hash_u32(std::uint64_t& h, std::uint32_t v) {
+inline void hash_u32(std::uint64_t& h, std::uint32_t v) {
   for (int i = 0; i < 4; ++i) {
     hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
     v >>= 8;
   }
 }
 
-inline std::int32_t hash_i32(std::uint64_t& h, std::int32_t v) {
+inline void hash_i32(std::uint64_t& h, std::int32_t v) {
   hash_u32(h, static_cast<std::uint32_t>(v));
 }
 
