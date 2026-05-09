@@ -35,7 +35,7 @@ int main(int argc, char** argv) {
     const auto& stream = ts::gen::make(kind, n);
 
     ts::transport::UdsDgramSocket sock(local);
-    const auto peer = ts::transport::UdsDgramSocket::peer_from_path(local);
+    const auto peer = ts::transport::UdsDgramSocket::peer_from_path(to_gateway);
 
     std::uint64_t seq = 1;
     const auto t0 = ts::time::now_ns();
