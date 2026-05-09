@@ -1,7 +1,7 @@
 # Define a library target
 add_library(ts_engine)
 # Add source files to the library
-target_sources(ts_engine PUBLIC
+target_sources(ts_engine PRIVATE
         # Compiler doesnt compile headers directly; hpp files get pulled via #include from cpp files
         # So listing hpp files just cosmetic
         engine.hpp

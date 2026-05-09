@@ -1,7 +1,7 @@
 # Define a library target
 add_library(exchange_gen)
 # Add source files to this library target for other reference
-target_sources(exchange_gen PUBLIC
+target_sources(exchange_gen PRIVATE
         generator/scenarios.hpp
         generator/scenarios.cpp
 )
