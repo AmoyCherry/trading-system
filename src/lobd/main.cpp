@@ -21,6 +21,7 @@ static std::string arg(int argc, char** argv, const std::string& name, const std
   return def;
 }
 
+// acks + rejects + cancel_acks should equal to total_msgs, see order_book on_new and on_cancel
 struct ReplayCounters {
   std::uint64_t acks = 0;
   std::uint64_t cancel_acks = 0;
@@ -93,16 +94,14 @@ int main(int argc, char** argv) {
       ++ctr.applied_msgs;
       eng.on_new(*m, out);
     } else if (auto* c = std::get_if<ts::proto::Cancel>(&d->msg)) {
-      ++ctr.cancel_acks;
       eng.on_cancel(*c, out);
     } else if (auto* e = std::get_if<ts::proto::EndOfReplay>(&d->msg)) {
-      print_result(ctr, eng.summary());
       break;
+    } else {
+      // unexpected msg type
+      std::cerr << "Unexpected msg type can't be handled in lob" << "\n";
+      ++ctr.decode_errors;
     }
-
-    // unexpected msg type
-    std::cerr << "Unexpected msg type can't be handled in lob" << "\n";
-    ++ctr.decode_errors;
   }
 
   print_result(ctr, eng.summary());

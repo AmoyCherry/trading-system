@@ -36,7 +36,8 @@ int main(int argc, char** argv) {
     while (!g_stop.load()) {
         ts::wire::Frame frame{};
         ts::transport::Peer from{};
-        sock.recv_into(frame.writable(), from);
+        const auto n = sock.recv_into(frame.writable(), from);
+        frame.len = static_cast<uint32_t>(n);
 
         const auto decoded = ts::wire::decode(frame.bytes_view());
         if (!decoded.has_value()) {
