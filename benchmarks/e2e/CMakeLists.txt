@@ -1,9 +1,4 @@
 # Define an executable target
-add_executable(e2e_runner runner/main.cpp)
-# Add dependencies to this target
-target_link_libraries(e2e_runner PRIVATE ts_common)
-
-# Define an executable target
 add_executable(inproc_runner inproc_runner.cpp)
 # Include other libs to the target to meet the target's dependencies
 target_link_libraries(inproc_runner PRIVATE
