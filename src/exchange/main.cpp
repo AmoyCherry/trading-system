@@ -6,6 +6,7 @@
 #include "transport/uds_dgram.hpp"
 #include "time/clock.hpp"
 #include "protocol/wire.hpp"
+#include "util/affinity.hpp"
 
 namespace {
 
@@ -30,6 +31,11 @@ int main(int argc, char** argv) {
     const std::string to_gateway = arg(argc, argv, "--to-gateway", "/tmp/ts_gw.sock");
     const std::string scenario_name = arg(argc, argv, "--scenario", "cross");
     const std::uint64_t n = arg_u64(argc, argv, "--n", 200'000);
+    const std::uint64_t cpu_core = arg_u64(argc, argv, "--cpu-core", 2);
+
+    // taskset -c MUST be disabled!
+    ts::util::pin_thread_to_cpu(cpu_core);
+
 
     const auto kind = ts::gen::parse_kind(scenario_name);
     const auto& stream = ts::gen::make(kind, n);

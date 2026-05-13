@@ -1,5 +1,6 @@
 #include "protocol/wire.hpp"
 #include "transport/uds_dgram.hpp"
+#include "util/affinity.hpp"
 
 #include <atomic>
 #include <csignal>
@@ -16,12 +17,23 @@ static std::string arg(int argc, char** argv, const std::string& name, const std
     return def;
 }
 
+static std::uint64_t arg_64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (name == argv[i]) return std::stoull(argv[i + 1]);
+    }
+    return def;
+}
+
 int main(int argc, char** argv) {
     std::signal(SIGINT, on_sig);
     std::signal(SIGTERM, on_sig);
 
     const std::string local = arg(argc, argv, "--local", "/tmp/ts_gw.sock");
     const std::string to_lob = arg(argc, argv, "--to-lob", "/tmp/ts_lob.sock");
+    const std::uint64_t cpu_core = arg_64(argc, argv, "--cpu-core", 3);
+
+    // taskset -c MUST be disabled!
+    ts::util::pin_thread_to_cpu(cpu_core);
 
     ts::transport::UdsDgramSocket sock(local);
     const auto lob_peer  = ts::transport::UdsDgramSocket::peer_from_path(to_lob);

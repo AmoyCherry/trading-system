@@ -8,6 +8,7 @@
 #include <string>
 
 #include "book_summary.hpp"
+#include "util/affinity.hpp"
 
 namespace {
 
@@ -17,6 +18,13 @@ static void on_sig(int) { g_stop.store(true); }
 static std::string arg(int argc, char** argv, const std::string& name, const std::string& def) {
   for (int i = 1; i + 1 < argc; ++i) {
     if (name == argv[i]) return argv[i + 1];
+  }
+  return def;
+}
+
+static std::uint64_t arg_64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
+  for (int i = 1; i + 1 < argc; ++i) {
+    if (name == argv[i]) return std::stoull(argv[i + 1]);
   }
   return def;
 }
@@ -66,6 +74,9 @@ int main(int argc, char** argv) {
   std::signal(SIGTERM, on_sig);
 
   const std::string local = arg(argc, argv, "--local", "/tmp/ts_lob.sock");
+  const std::uint64_t cpu_core = arg_64(argc, argv, "--cpu-core", 4);
+  // taskset -c MUST be disabled!
+  ts::util::pin_thread_to_cpu(cpu_core);
   ts::transport::UdsDgramSocket sock(local);
 
   ts::engine::Engine eng;
