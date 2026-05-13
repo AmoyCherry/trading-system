@@ -65,7 +65,7 @@ N="${2:-2000000}"               # number of scenario units
 # (some AMD/recent Intel). Override per run, e.g.:
 #     LOB_CORE=4 GW_CORE=6 EX_CORE=8 ./scripts/run_e2e_3proc.sh
 # Set PIN=0 to disable; useful as a "no-pin baseline" experiment.
-PIN="${PIN:-1}"
+PIN="${PIN:-0}" # disabled!
 LOB_CORE="${LOB_CORE:-2}"
 GW_CORE="${GW_CORE:-3}"
 EX_CORE="${EX_CORE:-4}"
@@ -87,7 +87,7 @@ else
   LOB_PREFIX=()
   GW_PREFIX=()
   EX_PREFIX=()
-  echo "pinning: OFF"
+  echo "No taskset -c"
 fi
 
 # --- timeouts ----------------------------------------------------------------
