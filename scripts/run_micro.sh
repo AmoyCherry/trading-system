@@ -24,6 +24,7 @@ if [[ "${PIN}" == "1" ]]; then
   }
   MICRO_PREFIX=(taskset -c "${INPROC}")
 else
+  echo "No taskset -c"
   MICRO_PREFIX=()
 fi
 
