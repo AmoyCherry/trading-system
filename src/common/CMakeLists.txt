@@ -11,9 +11,10 @@ target_sources(ts_common PRIVATE
         protocol/pipeline.hpp
         time/clock.cpp
         stats/percentiles.hpp
-        util/affinity.cpp
+        util/affinity.hpp
         util/cli.cpp
 )
 # Export the library
 target_include_directories(ts_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 target_compile_features(ts_common PUBLIC cxx_std_20)
