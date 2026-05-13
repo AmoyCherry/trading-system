@@ -19,6 +19,7 @@ if [[ "${PIN}" == "1" ]]; then
   }
   INPROC_PREFIX=(taskset -c "${INPROC}")
 else
+  echo "No taskset -c"
   INPROC_PREFIX=()
 fi
 
