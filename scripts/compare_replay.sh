@@ -37,6 +37,8 @@ if diff -q "${A}" "${B}" >/dev/null; then
   echo "MATCH"
   echo "RUN_DIR=${RUN_DIR}"
   exit 0
+else
+  echo "NOT MATCH!!!"
 fi
 
 echo "MISMATCH" >&2
