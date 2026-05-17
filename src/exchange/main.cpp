@@ -17,9 +17,16 @@ std::string arg(int argc, char** argv, const std::string& name, const std::strin
     return def;
 }
 
-std::uint64_t arg_u64(int argc, char** argv, const std::string& name, std::uint64_t def) {
+static std::uint64_t arg_u64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (name == argv[i]) return std::stoull(argv[i + 1]);
+    }
+    return def;
+}
+
+static std::int64_t arg_i64(int argc, char** argv, const std::string& name, const std::int64_t def) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (name == argv[i]) return std::stoll(argv[i + 1]);
     }
     return def;
 }
@@ -31,11 +38,11 @@ int main(int argc, char** argv) {
     const std::string to_gateway = arg(argc, argv, "--to-gateway", "/tmp/ts_gw.sock");
     const std::string scenario_name = arg(argc, argv, "--scenario", "cross");
     const std::uint64_t n = arg_u64(argc, argv, "--n", 200'000);
-    const std::uint64_t cpu_core = arg_u64(argc, argv, "--cpu-core", 2);
+    const std::int64_t cpu_core = arg_i64(argc, argv, "--cpu-core", -1);
 
-    // taskset -c MUST be disabled!
-    ts::util::pin_thread_to_cpu(cpu_core);
-
+    if (cpu_core >= 0) {
+        ts::util::pin_thread_to_cpu(cpu_core);
+    }
 
     const auto kind = ts::gen::parse_kind(scenario_name);
     const auto& stream = ts::gen::make(kind, n);

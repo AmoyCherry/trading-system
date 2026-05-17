@@ -54,40 +54,77 @@ LOB_BIN="${BUILD_DIR}/src/lobd/lobd"
 GW_BIN="${BUILD_DIR}/src/gateway/gateway"
 EX_BIN="${BUILD_DIR}/src/exchange/exchange_sim"
 
-# --- positional args ---------------------------------------------------------
+# --- argument parsing -------------------------------------------------------
+# Phase 1: walk $@, consume known flags, push everything else into POSITIONAL.
+# Phase 2: reset $@ from POSITIONAL, then assign $1, $2, ... as before.
+
+USE_IN_BINARY_AFFINITY=0
+POSITIONAL=()
+LOB_CORE="${LOB_CORE:-2}"
+GW_CORE="${GW_CORE:-3}"
+EX_CORE="${EX_CORE:-4}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    # Form A: `--cpu-core *`  (flag + anything)
+    --cpu-core)
+      USE_IN_BINARY_AFFINITY=1
+      shift
+      ;;
+
+    # End-of-options marker: everything after is positional, even if it
+    # starts with `--`. Standard POSIX convention.
+    --)
+      shift
+      POSITIONAL+=("$@")
+      break
+      ;;
+
+    # Unknown flag: fail loudly. Better than silently passing through.
+    --*)
+      echo "unknown flag: $1" >&2
+      exit 2
+      ;;
+
+    # Plain positional
+    *)
+      POSITIONAL+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Replace $@ with just the positionals. Now $1, $2, ... are clean.
+set -- "${POSITIONAL[@]}"
+
+# Phase 2: assign positionals exactly as you already do.
 SCENARIO="${1:-cross}"          # cross | add_only | cancel_heavy
 N="${2:-2000000}"               # number of scenario units
 
-# --- CPU pinning -------------------------------------------------------------
-# Default cores: skip 0 (kernel housekeeping commonly lands there) and pick
-# three non-adjacent cores to reduce the chance of hitting SMT siblings on
-# CPUs where siblings are numbered N and N+1 (some Intel) or N and N+core_count
-# (some AMD/recent Intel). Override per run, e.g.:
-#     LOB_CORE=4 GW_CORE=6 EX_CORE=8 ./scripts/run_e2e_3proc.sh
-# Set PIN=0 to disable; useful as a "no-pin baseline" experiment.
-PIN="${PIN:-0}" # disabled!
-LOB_CORE="${LOB_CORE:-4}"
-GW_CORE="${GW_CORE:-3}"
-EX_CORE="${EX_CORE:-2}"
-
-# Resolve the taskset prefix once, as a bash array. When PIN=0 the array is
-# empty and expands to nothing in the launch commands below.
+# Resolve the taskset prefix once, as a bash array. When USE_IN_BINARY_AFFINITY
+# and expands to nothing in the launch commands below.
 # Bash arrays: declared with (), expanded with "${name[@]}" to preserve word splits.
-if [[ "${PIN}" == "1" ]]; then
-  # `command -v` returns success iff `taskset` is on PATH (util-linux package).
-  command -v taskset >/dev/null || {
-    echo "taskset not found (install util-linux), or set PIN=0" >&2
-    exit 3
-  }
-  LOB_PREFIX=(taskset -c "${LOB_CORE}")
-  GW_PREFIX=(taskset -c "${GW_CORE}")
-  EX_PREFIX=(taskset -c "${EX_CORE}")
-  echo "pinning: lobd=core${LOB_CORE} gateway=core${GW_CORE} exchange=core${EX_CORE}"
-else
+if [[ "${USE_IN_BINARY_AFFINITY}" -eq 1 ]]; then
+  LOB_CPU=(--cpu-core "${LOB_CORE}")
+  GW_CPU=(--cpu-core "${GW_CORE}")
+  EX_CPU=(--cpu-core "${EX_CORE}")
   LOB_PREFIX=()
   GW_PREFIX=()
   EX_PREFIX=()
-  echo "No taskset -c"
+  echo "Argument --cpu-core detected: Using in-binary affinity, no taskset -c."
+else
+  # `command -v` returns success iff `taskset` is on PATH (util-linux package).
+  command -v taskset >/dev/null || {
+    echo "taskset not found" >&2
+    exit 3
+  }
+  LOB_CPU=()
+  GW_CPU=()
+  EX_CPU=()
+  LOB_PREFIX=(taskset -c "${LOB_CORE}")
+  GW_PREFIX=(taskset -c "${GW_CORE}")
+  EX_PREFIX=(taskset -c "${EX_CORE}")
+  echo "taskset -c pinning: lobd=core${LOB_CORE} gateway=core${GW_CORE} exchange=core${EX_CORE}"
 fi
 
 # --- timeouts ----------------------------------------------------------------
@@ -163,7 +200,7 @@ stop_pid() {
 # actually narrowed the mask (useful when debugging cgroup overrides).
 log_affinity() {
   local pid="$1" name="$2"
-  [[ "${PIN}" == "1" ]] || return 0
+  [[ "${USE_IN_BINARY_AFFINITY}" -eq 1 ]] || return 0
   taskset -p "${pid}" 2>/dev/null | sed "s/^/  affinity[${name}]: /"
 }
 
@@ -172,14 +209,14 @@ log_affinity() {
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" \
+"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" "${LOB_CPU[@]}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
 log_affinity "${LOB_PID}" "lobd"
 
 # 2. gateway  --- binds, dials lobd.
-"${GW_PREFIX[@]}" "${GW_BIN}" --local "${GW}" --to-lob "${LOB}" \
+"${GW_PREFIX[@]}" "${GW_BIN}" --local "${GW}" --to-lob "${LOB}" "${GW_CPU[@]}" \
   > "${RUN_DIR}/gateway.log" 2>&1 &
 GW_PID=$!
 wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
@@ -192,7 +229,7 @@ echo "running exchange_sim: scenario=${SCENARIO} n=${N}"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
   "${EX_PREFIX[@]}" "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" \
-    --scenario "${SCENARIO}" --n "${N}" \
+    --scenario "${SCENARIO}" --n "${N}" "${EX_CPU[@]}" \
   | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in
 # the first slot of PIPESTATUS (an array of every pipe stage's exit code).

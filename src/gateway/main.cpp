@@ -17,9 +17,16 @@ static std::string arg(int argc, char** argv, const std::string& name, const std
     return def;
 }
 
-static std::uint64_t arg_64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
+static std::uint64_t arg_u64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
     for (int i = 1; i + 1 < argc; ++i) {
         if (name == argv[i]) return std::stoull(argv[i + 1]);
+    }
+    return def;
+}
+
+static std::int64_t arg_i64(int argc, char** argv, const std::string& name, const std::int64_t def) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (name == argv[i]) return std::stoll(argv[i + 1]);
     }
     return def;
 }
@@ -30,10 +37,11 @@ int main(int argc, char** argv) {
 
     const std::string local = arg(argc, argv, "--local", "/tmp/ts_gw.sock");
     const std::string to_lob = arg(argc, argv, "--to-lob", "/tmp/ts_lob.sock");
-    const std::uint64_t cpu_core = arg_64(argc, argv, "--cpu-core", 3);
+    const std::int64_t cpu_core = arg_i64(argc, argv, "--cpu-core", -1);
 
-    // taskset -c MUST be disabled!
-    ts::util::pin_thread_to_cpu(cpu_core);
+    if (cpu_core >= 0) {
+        ts::util::pin_thread_to_cpu(cpu_core);
+    }
 
     ts::transport::UdsDgramSocket sock(local);
     const auto lob_peer  = ts::transport::UdsDgramSocket::peer_from_path(to_lob);
