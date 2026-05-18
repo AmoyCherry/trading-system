@@ -1,8 +1,39 @@
 #include "book/order_book.hpp"
 
 #include <algorithm>
+#include <limits>
 
 namespace ts::engine {
+
+namespace {
+
+const uint64_t kFnvOffset = 14695981039346656037ull;
+const uint64_t kFnvPrime = 1099511628211ull;
+
+inline void hash_byte(std::uint64_t& h, std::uint8_t v) {
+  h ^= v;
+  h *= kFnvPrime;
+}
+
+inline void hash_u64(std::uint64_t& h, std::uint64_t v) {
+  for (int i = 0; i < 8; ++i) {
+    hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
+    v >>= 8;
+  }
+}
+
+inline void hash_u32(std::uint64_t& h, std::uint32_t v) {
+  for (int i = 0; i < 4; ++i) {
+    hash_byte(h, static_cast<std::uint8_t>(v & 0xffu));
+    v >>= 8;
+  }
+}
+
+inline void hash_i32(std::uint64_t& h, std::int32_t v) {
+  hash_u32(h, static_cast<std::uint32_t>(v));
+}
+
+}
 
 proto::Qty OrderBook::order_qty(proto::OrderId id) const {
   auto it = live_.find(id);
@@ -179,6 +210,109 @@ void OrderBook::match_sell(LiveOrder& incoming, const EventSink& out) {
 
     if (level.empty()) bids_.erase(best_bid_it);
   }
+}
+
+BookSummary OrderBook::summary() const {
+  BookSummary s{};
+
+  s.live_orders = static_cast<std::uint64_t>(live_order_count());
+  s.best_ask = best_ask();
+  s.best_bid = best_bid();
+
+  // state: <live order size, bids, asks>
+  std::uint64_t h = kFnvOffset;
+  hash_u64(h, s.live_orders);
+
+  auto hash_orders = [&](const std::deque<proto::OrderId>& level, std::uint8_t err) {
+    for (const auto id : level) {
+      auto it = live_.find(id);
+      if (it == live_.end()) {
+        hash_u64(h, id);
+        hash_byte(h, err);
+        continue;
+      }
+
+      const auto& o = it->second;
+      hash_u64(h, o.id);
+      hash_u32(h, o.symbol);
+      hash_byte(h, static_cast<std::uint8_t>(o.side));
+      hash_i32(h, o.price);
+      hash_i32(h, o.qty);
+    }
+  };
+
+  // bids hash: 'B' + price + level size + each live order
+  hash_byte(h, static_cast<std::uint8_t>('B'));
+  for (const auto& [price, level] : bids_) {
+    hash_i32(h, price);
+    hash_u64(h, static_cast<std::uint64_t>(level.size()));
+    hash_orders(level, 0xEE);
+  }
+
+  // asks hash: 'A' + Price + level size + each live order
+  hash_byte(h, static_cast<std::uint8_t>('A'));
+  for (const auto& [price, level] : asks_) {
+    hash_i32(h, price);
+    hash_u64(h, static_cast<std::uint64_t>(level.size()));
+    hash_orders(level, 0xEF);
+  }
+  s.state_hash = h;
+
+  return s;
+}
+
+std::uint32_t OrderBook::active_levels(proto::Side side) const {
+  return side == proto::Side::Buy ? bids_.size() : asks_.size();
+}
+
+std::vector<proto::OrderId> OrderBook::order_ids_at_price(proto::Side side, proto::Price price) const {
+  std::vector<proto::OrderId> out;
+
+  auto collect = [&](const auto& levels) {
+    auto it = levels.find(price);
+    if (it == levels.end()) return;
+    // NOTE!
+    out.reserve(it->second.size());
+    for (const proto::OrderId id : it->second) {
+      // NOTE!
+      if (live_.find(id) != live_.end()) {
+        out.push_back(id);
+      }
+    }
+  };
+  side == proto::Side::Buy ? collect(bids_) : collect(asks_);
+
+  return out;
+}
+
+std::vector<OrderBook::LevelStates> OrderBook::level_stats(proto::Side side, std::size_t limit = std::numeric_limits<std::size_t>::max()) const {
+  std::vector<LevelStates> out;
+
+  auto collect = [&](auto&& levels) {
+    std::size_t n =  std::min(static_cast<std::size_t>(levels.size()), limit);
+    out.reserve(n);
+
+    std::size_t count = 0;
+    for (const auto& [px, level] : levels) {
+      proto::Qty level_qty = 0;
+      std::size_t active_order = 0;
+      for (const auto& id : level) {
+        auto it = live_.find(id);
+        if (it == live_.end()) continue;
+        level_qty += it->second.qty;
+        ++active_order;
+      }
+
+      out.push_back({px, level_qty, active_order});
+
+      if (++count == n) break;
+    }
+
+    return out;
+  };
+  side == proto::Side::Buy ? collect(bids_) : collect(asks_);
+
+  return out;
 }
 
 } // namespace ts::engine

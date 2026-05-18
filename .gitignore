@@ -44,3 +44,4 @@ artifacts
 *.dwo
 /.idea/modules.xml
 /build/
+/.claude/worktrees/vigilant-antonelli-387e32/

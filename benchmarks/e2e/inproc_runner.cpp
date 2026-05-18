@@ -7,7 +7,30 @@
 #include <string>
 #include <vector>
 
+#include "util/affinity.hpp"
+
 namespace {
+
+static std::string arg(int argc, char** argv, const std::string& name, const std::string& def) {
+  for (int i = 1; i + 1 < argc; ++i) {
+    if (name == argv[i]) return argv[i + 1];
+  }
+  return def;
+}
+
+static std::uint64_t arg_u64(int argc, char** argv, const std::string& name, const std::uint64_t def) {
+  for (int i = 1; i + 1 < argc; ++i) {
+    if (name == argv[i]) return std::stoull(argv[i + 1]);
+  }
+  return def;
+}
+
+static std::int64_t arg_i64(int argc, char** argv, const std::string& name, const std::int64_t def) {
+  for (int i = 1; i + 1 < argc; ++i) {
+    if (name == argv[i]) return std::stoll(argv[i + 1]);
+  }
+  return def;
+}
 
 using ts::proto::ClientMsg;
 using ts::proto::NewOrder;
@@ -58,14 +81,14 @@ std::vector<ClientMsg> make_scenario_add_only(std::uint64_t n) {
 } // namespace
 
 int main(int argc, char** argv) {
-  std::string scenario = "cross";
-  std::uint64_t n = 16'000'000;
-  std::uint64_t warmup = 100'000;
+  std::string scenario = arg(argc, argv, "--scenario", "cross");
+  std::uint64_t n = arg_u64(argc, argv, "--n", 16'000'000);
+  std::uint64_t warmup = arg_u64(argc, argv, "--warmup", 100'000);
+  std::int64_t cpu_core = arg_i64(argc, argv, "--cpu-core", -1);
 
-  // Minimal CLI
-  if (argc >= 2) scenario = argv[1];
-  if (argc >= 3) n = std::stoull(argv[2]);
-  if (argc >= 4) warmup = std::stoull(argv[3]);
+  if (cpu_core >= 0) {
+    ts::util::pin_thread_to_cpu(cpu_core);
+  }
 
   ts::engine::Engine eng;
   ts::gw::InProcGateway gw(eng);

@@ -16,6 +16,8 @@ public:
     std::optional<proto::Price> best_bid() const { return book_.best_bid(); }
     std::optional<proto::Price> best_ask() const { return book_.best_ask(); }
 
+    BookSummary summary() const { return book_.summary(); }
+
 private:
     OrderBook book_;
 };

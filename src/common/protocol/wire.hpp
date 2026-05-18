@@ -42,24 +42,27 @@ constexpr std::size_t   kMaxFrameSize = 256;
 constexpr std::size_t   kHeaderSize = 16;
 
 enum class MsgType : std::uint16_t {
-  NewOrder   = 1,
-  Cancel     = 2,
-  OrderAck   = 3,
-  CancelAck  = 4,
-  Reject     = 5,
-  Fill       = 6,
+  NewOrder    = 1,
+  Cancel      = 2,
+  OrderAck    = 3,
+  CancelAck   = 4,
+  Reject      = 5,
+  Fill        = 6,
+  EndOfReplay = 7,
 };
 
 using WireMsg = std::variant<
     proto::NewOrder, proto::Cancel,
-    proto::OrderAck, proto::CancelAck, proto::Reject, proto::Fill>;
+    proto::OrderAck, proto::CancelAck, proto::Reject, proto::Fill,
+    proto::EndOfReplay
+  >;
 
 struct Frame {
   std::array<std::byte, kMaxFrameSize> buf{};
   std::uint32_t len{0};
 
   std::span<const std::byte> bytes_view() const { return {buf.data(), len}; }
-  std::span<std::byte> bytes_writable() { return {buf.data(), buf.size()}; }
+  std::span<std::byte> writable() { return {buf.data(), buf.size()}; }
 };
 
 struct Decoded {
@@ -235,6 +238,15 @@ inline bool encode(const proto::Fill& m, std::uint64_t seq, Frame& out) {
   return true;
 }
 
+inline bool encode(const proto::EndOfReplay& m, std::uint64_t seq, Frame& out) {
+  constexpr std::uint32_t payload = 0;
+  const std::uint32_t total = static_cast<std::uint32_t>(kHeaderSize + payload);
+  if (total > kMaxFrameSize) return false;
+
+  write_header(out, MsgType::EndOfReplay, total, seq);
+  return true;
+}
+
 // Convenience: encode a WireMsg variant and draw the Frame
 inline bool encode(const WireMsg& msg, std::uint64_t seq, Frame& out) {
   return std::visit([&](auto&& inner) { return encode(inner, seq, out); }, msg);
@@ -314,6 +326,10 @@ inline std::optional<Decoded> decode(std::span<const std::byte> bytes) {
       if (!read_u8(p, end, taker)) return std::nullopt;
       m.is_taker = (taker != 0);
       d.msg = m;
+      return d;
+    }
+    case MsgType::EndOfReplay: {
+      d.msg = proto::EndOfReplay{};
       return d;
     }
     default:

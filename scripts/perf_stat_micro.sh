@@ -12,12 +12,14 @@ BIN="${BUILD_DIR}/benchmarks/micro/microbench"
 FILTER="${1:-BM_MatchSweep}"
 
 # Pin to one CPU if you want (edit CPU=2 etc.)
-CPU="${CPU:-}"
+CPU="${CPU:-2}"
 
 CMD=( "${BIN}" --benchmark_filter="${FILTER}" --benchmark_min_time=1.0s )
 
 if [[ -n "${CPU}" ]]; then
   CMD=( taskset -c "${CPU}" "${CMD[@]}" )
+else
+  echo "No taskset -c"
 fi
 
 echo "Command: ${CMD[*]}" | tee "${RUN_DIR}/cmd.txt"

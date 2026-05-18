@@ -1,3 +1,28 @@
+## Apr 20, 2026 at 00:11
+Judgment between plain function and CRTP:
+CRTP helps when the base genuinely provides reusable behavior, interface enforcement, and compiler-time polymorphism.
+CRTP should care about two-way friendship and hidden state. 
+
+## Apr 15, 2026 at 23:33
+Use `side_t` for STL container indices.
+
+Check container size before indexing.
+
+If both two sides need to replenish, randomly choose one side to avoid always choosing one fixed side
+
+### craft-C++
+**`std::variant`**
+mem layout of variant variables: `[larget Member space for payload] + [index] + [padding]`
+
+`std::visit` is the standard way to dispatch variants. The best practice of `std:visit` is to use generic closure (`auto&& inner`). The closure will be compiled into an anonymous functor with a Generic operator. Then the compiler will generate concrete operators based on the variant list (or the type itself if calling a generic closure directly). And once these operators have a concrete data type in the variant list, the function overloads or the constexpr can be resolved.  
+
+
+## Mar 21, 2026 at 23:26
+Is it a best practice to initialize all the member variables with default values in the struct definition?
+
+If a class only use RAII types, it automatically is a RAII type? And by the rule of 0, I should not implement the five special member functions for this class?
+
+
 ## Feb 21, 2026 at 11:58
 1. Understand console log of micro and perf with the highest ROI.
    
