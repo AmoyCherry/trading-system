@@ -53,6 +53,7 @@ For every change (case study), write a 10–15 line “experiment card”:
 - [M5 — Formalize protocol + add transport backends (2 weeks)](https://chatgpt.com/s/t_699d17ddeaf88191852f19a49b0c08ac)
 - [M6]()
   - [Generator](https://chatgpt.com/s/t_69c5e4046be48191bcf48b29198f44c3)
+- [M7](https://chatgpt.com/s/t_6a0b463cb7908191815189b423500b98)
 
 ```text
 trading-system/
