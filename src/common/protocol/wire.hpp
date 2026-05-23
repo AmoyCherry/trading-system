@@ -8,7 +8,6 @@
 #include <cstring>
 #include <optional>
 #include <span>
-#include <type_traits>
 #include <variant>
 
 #ifdef __APPLE__
@@ -155,7 +154,7 @@ inline void write_header(Frame& f, MsgType t, std::uint32_t length, std::uint64_
   f.len = length;
   std::byte* p = f.buf.data();
   p = write_u16(p, kWireVersion);
-  p = write_u16(p, static_cast<std::uint16_t>(t));
+  p = write_u16(p, static_cast<std::uint16_t>(t)); // msg type has fixed 2 bytes offset in Header
   p = write_u32(p, length);
   p = write_u64(p, seq);
 }
@@ -335,6 +334,20 @@ inline std::optional<Decoded> decode(std::span<const std::byte> bytes) {
     default:
       return std::nullopt;
   }
+}
+
+inline std::optional<MsgType> decode_type(std::span<const std::byte> bytes) {
+  if (bytes.size() < kHeaderSize) return std::nullopt;
+  if (bytes.size() > kMaxFrameSize) return std::nullopt;
+
+  const std::byte* p = bytes.data();
+  const std::byte* end = bytes.data() + bytes.size();
+  p += 2;
+  std::uint16_t type_u16{};
+  if (!read_u16(p, end, type_u16)) return std::nullopt;
+
+  auto type = static_cast<MsgType>(type_u16);
+  return type;
 }
 
 } // namespace ts::wire

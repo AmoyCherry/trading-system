@@ -48,6 +48,14 @@ struct ReplayCounters {
   }
 };
 
+enum class Mode {
+  Null,
+  Decode,
+  Match,
+};
+
+// template propagation
+template <Mode M>
 void print_result(const ReplayCounters& ctr, const ts::engine::BookSummary& s) {
   std::cout << "STATS role=lobd"
            << " applied_msgs=" << ctr.applied_msgs
@@ -62,14 +70,23 @@ void print_result(const ReplayCounters& ctr, const ts::engine::BookSummary& s) {
             << " fills=" << ctr.fills
             << " live_orders=" << s.live_orders
             << " best_bid=" << ts::engine::price_or_na(s.best_bid)
-            << " best_ask=" << ts::engine::price_or_na(s.best_ask)
-            << " state_hash=" << s.state_hash
-            << "\n";
+            << " best_ask=" << ts::engine::price_or_na(s.best_ask);
+
+  if constexpr (M == Mode::Match) {
+    std::cout << " state_hash=" << s.state_hash;
+  }
+  std::cout << "\n";
 }
 
+Mode parse_mode(std::string_view mode) {
+  if (mode == "null") return Mode::Null;
+  if (mode == "decode") return Mode::Decode;
+  if (mode == "match") return Mode::Match;
+  throw std::invalid_argument("invalid mode: " + std::string(mode));
 }
 
-int main(int argc, char** argv) {
+template <Mode M>
+int lobd_main(int argc, char** argv) {
   std::signal(SIGINT, on_sig);
   std::signal(SIGTERM, on_sig);
 
@@ -85,6 +102,10 @@ int main(int argc, char** argv) {
   ts::engine::Engine eng;
   ReplayCounters ctr;
 
+  ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
+    ctr.on_event(ev);
+  };
+
   std::cout << "READY lobd local=" << local << "\n" << std::flush;
 
   while (!g_stop.load()) {
@@ -93,31 +114,50 @@ int main(int argc, char** argv) {
     const auto n = sock.recv_into(frame.writable(), from);
     frame.len = static_cast<std::uint32_t>(n);
 
-    auto d = ts::wire::decode(frame.bytes_view());
-    if (!d.has_value()) {
-      ++ctr.decode_errors;
-      continue;
-    }
-
-    ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
-      ctr.on_event(ev);
-    };
-
-    // Only accept client messages
-    if (auto* m = std::get_if<ts::proto::NewOrder>(&d->msg)) {
-      ++ctr.applied_msgs;
-      eng.on_new(*m, out);
-    } else if (auto* c = std::get_if<ts::proto::Cancel>(&d->msg)) {
-      eng.on_cancel(*c, out);
-    } else if (auto* e = std::get_if<ts::proto::EndOfReplay>(&d->msg)) {
+    auto m_type = ts::wire::decode_type(frame.bytes_view());
+    if (m_type && *m_type == ts::wire::MsgType::EndOfReplay) {
       break;
-    } else {
-      // unexpected msg type
-      std::cerr << "Unexpected msg type can't be handled in lob" << "\n";
-      ++ctr.decode_errors;
     }
-  }
 
-  print_result(ctr, eng.summary());
+    if constexpr (M == Mode::Null) {  }
+    else if constexpr (M == Mode::Decode || M == Mode::Match) {
+      auto d = ts::wire::decode(frame.bytes_view());
+      if (!d.has_value()) {
+        ++ctr.decode_errors;
+        continue;
+      }
+
+      if constexpr (M == Mode::Match) {
+        // Only accept client messages
+        if (auto* m = std::get_if<ts::proto::NewOrder>(&d->msg)) {
+          ++ctr.applied_msgs;
+          eng.on_new(*m, out);
+        } else if (auto* c = std::get_if<ts::proto::Cancel>(&d->msg)) {
+          ++ctr.applied_msgs;
+          eng.on_cancel(*c, out);
+        } else {
+          // unexpected msg type
+          std::cerr << "Unexpected msg type can't be handled in lob" << "\n";
+          ++ctr.decode_errors;
+        }
+
+      } // if Match
+    } // if Decode || Match
+
+  } // while g_stop
+
+  print_result<M>(ctr, eng.summary());
+  return 0;
+}
+
+}
+
+int main(int argc, char** argv) {
+  const Mode mode = parse_mode(arg(argc, argv, "--mode", ""));
+  switch (mode) {
+    case Mode::Null: return lobd_main<Mode::Null>(argc, argv);
+    case Mode::Decode: return lobd_main<Mode::Decode>(argc, argv);
+    case Mode::Match: return lobd_main<Mode::Match>(argc, argv);
+  }
   return 0;
 }

@@ -102,12 +102,15 @@ stop_pid() {
   kill -KILL "${pid}" 2>/dev/null || true
 }
 
+## --- lob args ------------------------------------------------------------------
+LOB_MODE="${LOB_MODE:-match}"     # only `match` mode produces state hash
+
 # --- launch ------------------------------------------------------------------
 # Background each process (&), capture its PID ($!), redirect stdout+stderr
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_BIN}" --local "${LOB}" \
+"${LOB_BIN}" --local "${LOB}" --mode "${LOB_MODE}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"

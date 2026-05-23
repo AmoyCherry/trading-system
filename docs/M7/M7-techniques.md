@@ -172,26 +172,27 @@ This is *the* canonical pitfall of latency measurement. Gil Tene named it; every
 
 ### 4.1 Wire-to-wire stage attribution (lobd modes)  `[M7]`
 
-**What.** Run lobd in three modes that do progressively more work:
+**What.** lobd runs in one of three modes, each a strict superset of the previous. Cost differences between modes attribute latency to specific pipeline stages.
 
-| Mode | Behavior | Isolates |
+| Mode | Work | Floor |
 |---|---|---|
-| `null` | Validate header / length, count frames | transport + gateway + lobd recv-loop floor |
-| `decode` | Full wire decode, count message types, **don't** apply | + codec cost |
-| `match` | Decode + engine apply + state_hash | + engine cost |
+| `null` | header validation only | transport + recv-loop |
+| `decode` | + full wire decode | + codec |
+| `match` | + engine apply + state hash | + engine |
 
-Then attribute: engine ≈ `match - decode`, codec ≈ `decode - null`, transport floor ≈ `null`.
+Attribution arithmetic: `null` ≈ transport + recv-loop; `decode − null` ≈ codec; `match − decode` ≈ engine.
 
-**Why it matters.**
-- Without decomposition, an optimization claim is ambiguous. "Throughput went up 4%" — was the engine faster, did decode get faster, did the gateway scheduler change, was it OS variance?
-- With decomposition: "Throughput on `match` went up 4%, but `null` and `decode` are unchanged, and the win is largest on `cancel_heavy`. That's consistent with the cancel-path hypothesis." Now your claim has *mechanism*.
-- The subtraction is a heuristic, not a causal proof — cache state and branch-predictor state carry across modes. Acknowledge this; don't oversell.
+**Why it matters.** Without decomposition, a `match` throughput delta is unattributable — engine, codec, gateway scheduling, and OS noise are indistinguishable. With decomposition, a delta isolated to `match` (with null and decode unchanged) and concentrated on `cancel_heavy` is consistent with a cancel-path mechanism; competing explanations are ruled out by data, not argument.
 
-**How (in this project).** Implement as a `Mode` enum in lobd; branch hoisted out of the recv loop. **No vtables, no inheritance** — the dispatch overhead would muddy the very thing you're measuring. See `M7-plan-v2.md` §2 for implementation specifics.
+**Limits.** Cache, branch-predictor, and TLB state carry across modes — match warms the engine icache differently than null, so `match − decode` absorbs cache-state divergence in addition to the work itself. The decomposition is an attribution model, not a causal proof. Cross-check engine cost against microbench cycles/op (§4.2).
 
-**Signal value.** Tier-S signal at every quant shop. Industry vocabulary is "wire-to-wire decomposition" or "tick-to-trade breakdown" — use that on resume/README.
+**How (in this project).** Mode is selected at startup via `--mode {null,decode,match}`. A runtime switch in `main()` dispatches to a compile-time-specialized recv loop (`lobd_main<Mode>()`); nested `if constexpr` resolves all mode logic at compile time. Result: zero per-iteration dispatch, three independent I-cache footprints, full inlining per specialization. See [`M7-plan-v2.md` §2](M7-plan-v2.md#2-lobd-modes).
 
-**Read more.** Carl Cook, *When a Microsecond Is an Eternity* (CppCon 2017) describes Optiver's tick-to-trade pipeline and how they decompose it. The general technique is universal across HFT.
+**Alternatives considered.** A plain `if`/`else` in the hot loop would predict perfectly (stationary branch, ~0 mispredicts after iteration 1–2; cost is the 1–2 instructions to evaluate, not mispredict noise) but shares an I-cache footprint across all three modes and prevents per-mode dead-code elimination. `std::variant` + `std::visit` with visit wrapping the loop is equivalent in dispatch cost to the template approach but forces shared scaffolding (recv, header decode, EndOfReplay check) to be split across per-mode lambdas. Virtual dispatch has the same source-duplication issue and additionally prevents inlining.
+
+**Signal value.** Quant infra interviews probe stage attribution directly ("what's your transport cost vs engine cost?"). Industry vocabulary: *wire-to-wire decomposition*, *tick-to-trade breakdown*, *stage timestamps*.
+
+**Read more.** Carl Cook, *When a Microsecond Is an Eternity* (CppCon 2017) — Optiver tick-to-trade pipeline.
 
 ---
 

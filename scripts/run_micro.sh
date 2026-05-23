@@ -15,7 +15,7 @@ c++ --version | head -n 1 | tee -a "${RUN_DIR}/machine.txt" || true
 
 # Disable pinning by set PIN=0
 PIN="${PIN:-1}"
-MICRO="${INPROC:-2}"
+INPROC="${INPROC:-2}"
 if [[ "${PIN}" == "1" ]]; then
   # `command -v` returns success iff `taskset` is on PATH (util-linux package).
   command -v taskset >/dev/null || {

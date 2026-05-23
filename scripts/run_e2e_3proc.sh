@@ -63,6 +63,7 @@ POSITIONAL=()
 LOB_CORE="${LOB_CORE:-2}"
 GW_CORE="${GW_CORE:-3}"
 EX_CORE="${EX_CORE:-4}"
+LOB_MODE="${LOB_MODE:-NONE}"     # MUST choose null | decode | match
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -70,6 +71,16 @@ while [[ $# -gt 0 ]]; do
     --cpu-core)
       USE_IN_BINARY_AFFINITY=1
       shift
+      ;;
+
+    # Value-bearing flag (--mode VALUE) — consume two args
+    --mode)
+      if [[ -z "${2:-}" || "$2" == --* ]]; then
+        echo "missing value for --mode" >&2
+        exit 2
+      fi
+      LOB_MODE="$2"
+      shift 2
       ;;
 
     # End-of-options marker: everything after is positional, even if it
@@ -209,7 +220,7 @@ log_affinity() {
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" "${LOB_CPU[@]}" \
+"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" --mode "${LOB_MODE}" "${LOB_CPU[@]}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
