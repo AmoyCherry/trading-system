@@ -64,6 +64,7 @@ LOB_CORE="${LOB_CORE:-2}"
 GW_CORE="${GW_CORE:-3}"
 EX_CORE="${EX_CORE:-4}"
 LOB_MODE="${LOB_MODE:-NONE}"     # MUST choose null | decode | match
+STRIDE="${STRIDE:-N}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,6 +81,16 @@ while [[ $# -gt 0 ]]; do
         exit 2
       fi
       LOB_MODE="$2"
+      shift 2
+      ;;
+
+    # Value-bearing flag (--stride VALUE) — consume two args
+    --stride)
+      if [[ -z "${2:-}" || "$2" == --* ]]; then
+        echo "missing value for --mode" >&2
+        exit 2
+      fi
+      STRIDE="$2"
       shift 2
       ;;
 
@@ -239,7 +250,7 @@ log_affinity "${GW_PID}" "gateway"
 echo "running exchange_sim: scenario=${SCENARIO} n=${N}"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
-  "${EX_PREFIX[@]}" "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" \
+  "${EX_PREFIX[@]}" "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" --stride "${STRIDE}" \
     --scenario "${SCENARIO}" --n "${N}" "${EX_CPU[@]}" \
   | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in
