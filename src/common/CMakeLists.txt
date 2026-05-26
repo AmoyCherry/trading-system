@@ -11,6 +11,7 @@ target_sources(ts_common PRIVATE
         protocol/pipeline.hpp
         time/clock.cpp
         stats/percentiles.hpp
+        stats/sample_buffer.hpp
         util/affinity.hpp
         util/cli.cpp
 )
