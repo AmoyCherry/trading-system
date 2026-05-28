@@ -18,6 +18,9 @@
 # `taskset -c <N>`. For *clean* numbers you also need governor=performance,
 # Turbo off, and ideally isolcpus= for the pinned cores
 # (see docs/experiments/000_template.md, "Environment").
+#
+# E.g.: ./scripts/run_e2e_3proc.sh --mode null --stride 16 --cpu-core
+3
 # =============================================================================
 
 set -euo pipefail
