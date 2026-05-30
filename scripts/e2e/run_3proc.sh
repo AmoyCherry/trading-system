@@ -42,10 +42,8 @@ OUT_DIR="${OUT_DIR:-artifacts/results}"
 # Unique tag per run; used in artifacts dir AND socket paths so concurrent
 # runs don't collide. $$ is the shell PID.
 TS="$(date +%Y%m%d_%H%M%S)_$$"
-RUN_DIR="${OUT_DIR}/e2e3_${TS}"
+RUN_DIR="${OUT_DIR}/${TS}"
 mkdir -p "${RUN_DIR}"
-Dump_DIR="artifacts/dump/${TS}"
-mkdir -p "${Dump_DIR}"
 
 # --- socket paths ------------------------------------------------------------
 # UDS pathname sockets, namespaced by TS, cleaned up in trap below.
@@ -69,7 +67,7 @@ LOB_CORE="${LOB_CORE:-2}"
 GW_CORE="${GW_CORE:-3}"
 EX_CORE="${EX_CORE:-4}"
 LOB_MODE="${LOB_MODE:-NONE}"     # MUST choose null | decode | match
-STRIDE="${STRIDE:-N}"
+STRIDE="${STRIDE:- -1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -120,7 +118,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
 # Replace $@ with just the positionals. Now $1, $2, ... are clean.
 set -- "${POSITIONAL[@]}"
 
@@ -237,7 +234,7 @@ log_affinity() {
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
 "${LOB_PREFIX[@]}" "${LOB_BIN}" --mode "${LOB_MODE}" --stride "${STRIDE}" "${LOB_CPU[@]}" \
-  --local "${LOB}" --msgs "${N}" --dump "${Dump_DIR}" \
+  --local "${LOB}" --msgs "${N}" --dump "${RUN_DIR}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
@@ -245,7 +242,7 @@ log_affinity "${LOB_PID}" "lobd"
 
 # 2. gateway  --- binds, dials lobd.
 "${GW_PREFIX[@]}" "${GW_BIN}" --stride "${STRIDE}" "${GW_CPU[@]}" \
-  --local "${GW}" --to-lob "${LOB}" --msgs "${N}" --dump "${Dump_DIR}"  \
+  --local "${GW}" --to-lob "${LOB}" --msgs "${N}" --dump "${RUN_DIR}"  \
   > "${RUN_DIR}/gateway.log" 2>&1 &
 GW_PID=$!
 wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
@@ -258,7 +255,7 @@ echo "running exchange_sim: scenario=${SCENARIO} n=${N}"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
   "${EX_PREFIX[@]}" "${EX_BIN}" --stride "${STRIDE}" \
-    --local "${EXCH}" --to-gateway "${GW}" --dump "${Dump_DIR}" \
+    --local "${EXCH}" --to-gateway "${GW}" --dump "${RUN_DIR}" \
     --scenario "${SCENARIO}" --n "${N}" "${EX_CPU[@]}" \
   | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in
