@@ -20,7 +20,7 @@
 # (see docs/experiments/000_template.md, "Environment").
 #
 # E.g.: ./scripts/run_e2e_3proc.sh --mode null --stride 16 --cpu-core
-3
+#
 # =============================================================================
 
 set -euo pipefail
@@ -32,7 +32,7 @@ set -euo pipefail
 # Resolve the script's own dir, then cd to the repo root. This lets the
 # script run from anywhere ("./scripts/run_e2e_3proc.sh", "bash scripts/...", etc.).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 # Env-overridable knobs use the ${VAR:-default} idiom: VAR if set, else default.
@@ -44,6 +44,8 @@ OUT_DIR="${OUT_DIR:-artifacts/results}"
 TS="$(date +%Y%m%d_%H%M%S)_$$"
 RUN_DIR="${OUT_DIR}/e2e3_${TS}"
 mkdir -p "${RUN_DIR}"
+Dump_DIR="artifacts/dump/${TS}"
+mkdir -p "${Dump_DIR}"
 
 # --- socket paths ------------------------------------------------------------
 # UDS pathname sockets, namespaced by TS, cleaned up in trap below.
@@ -234,14 +236,16 @@ log_affinity() {
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" --mode "${LOB_MODE}" "${LOB_CPU[@]}" \
+"${LOB_PREFIX[@]}" "${LOB_BIN}" --mode "${LOB_MODE}" --stride "${STRIDE}" "${LOB_CPU[@]}" \
+  --local "${LOB}" --msgs "${N}" --dump "${Dump_DIR}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
 log_affinity "${LOB_PID}" "lobd"
 
 # 2. gateway  --- binds, dials lobd.
-"${GW_PREFIX[@]}" "${GW_BIN}" --local "${GW}" --to-lob "${LOB}" "${GW_CPU[@]}" \
+"${GW_PREFIX[@]}" "${GW_BIN}" --stride "${STRIDE}" "${GW_CPU[@]}" \
+  --local "${GW}" --to-lob "${LOB}" --msgs "${N}" --dump "${Dump_DIR}"  \
   > "${RUN_DIR}/gateway.log" 2>&1 &
 GW_PID=$!
 wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
@@ -253,7 +257,8 @@ log_affinity "${GW_PID}" "gateway"
 echo "running exchange_sim: scenario=${SCENARIO} n=${N}"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
-  "${EX_PREFIX[@]}" "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" --stride "${STRIDE}" \
+  "${EX_PREFIX[@]}" "${EX_BIN}" --stride "${STRIDE}" \
+    --local "${EXCH}" --to-gateway "${GW}" --dump "${Dump_DIR}" \
     --scenario "${SCENARIO}" --n "${N}" "${EX_CPU[@]}" \
   | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in

@@ -186,11 +186,17 @@ Attribution arithmetic: `null` ≈ transport + recv-loop; `decode − null` ≈ 
 
 **Limits.** Cache, branch-predictor, and TLB state carry across modes — match warms the engine icache differently than null, so `match − decode` absorbs cache-state divergence in addition to the work itself. The decomposition is an attribution model, not a causal proof. Cross-check engine cost against microbench cycles/op (§4.2).
 
-**How (in this project).** Mode is selected at startup via `--mode {null,decode,match}`. A runtime switch in `main()` dispatches to a compile-time-specialized recv loop (`lobd_main<Mode>()`); nested `if constexpr` resolves all mode logic at compile time. Result: zero per-iteration dispatch, three independent I-cache footprints, full inlining per specialization. See [`M7-plan-v2.md` §2](M7-plan-v2.md#2-lobd-modes).
+**How (in this project).** Mode is selected at startup via `--mode {null,decode,match}`. A runtime switch in `main()` dispatches to a compile-time-specialized template function (`lobd_main<Mode>()`); nested `if constexpr` resolves all mode logic at compile time. Result: zero per-iteration dispatch, three independent I-cache footprints, full inlining per specialization. See [`M7-plan-v2.md` §2](M7-plan-v2.md#2-lobd-modes).
 
 **Alternatives considered.** A plain `if`/`else` in the hot loop would predict perfectly (stationary branch, ~0 mispredicts after iteration 1–2; cost is the 1–2 instructions to evaluate, not mispredict noise) but shares an I-cache footprint across all three modes and prevents per-mode dead-code elimination. `std::variant` + `std::visit` with visit wrapping the loop is equivalent in dispatch cost to the template approach but forces shared scaffolding (recv, header decode, EndOfReplay check) to be split across per-mode lambdas. Virtual dispatch has the same source-duplication issue and additionally prevents inlining.
 
 **Signal value.** Quant infra interviews probe stage attribution directly ("what's your transport cost vs engine cost?"). Industry vocabulary: *wire-to-wire decomposition*, *tick-to-trade breakdown*, *stage timestamps*.
+
+> Two attribution tools:
+> 
+> 1. Modes decompose wire-to-wire latency to attribute how many cycles the matching engine contribute to across the whole run. delta
+> 
+> 2. Stage timestamps attribute per message latency to tell the P99.
 
 **Read more.** Carl Cook, *When a Microsecond Is an Eternity* (CppCon 2017) — Optiver tick-to-trade pipeline.
 

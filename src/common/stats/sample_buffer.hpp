@@ -20,13 +20,13 @@ void dump(const std::vector<T>& vec,
     }
     // Write header
     out << header << "\n";
-    for (const auto& ts : vec) {
-        out << format_row(ts) << "\n";
+    for (const auto& timestamp : vec) {
+        out << format_row(timestamp) << "\n";
     }
 }
 
 template <typename T>
-void pre_faulting(std::vector<T>& vec, int64_t stride, std::size_t total_msgs) {
+void pre_faulting(std::vector<T>& vec, std::int64_t stride, std::size_t total_msgs) {
     if (stride < 0) {
         throw std::invalid_argument("stride must be set and greater than 0.");
     } else if (stride == 0) {
@@ -34,16 +34,22 @@ void pre_faulting(std::vector<T>& vec, int64_t stride, std::size_t total_msgs) {
     } else {
         if ((stride & (stride - 1)) != 0) { throw std::invalid_argument("stride must be pow of 2."); }
         // resize() will write every single byte which is slow
-        vec.reserve(total_msgs / stride);
-        if (madvise(vec.data(), vec.capacity() * sizeof(vec), MADV_POPULATE_WRITE) != 0) {
+        vec.reserve(total_msgs / stride + 1);
+        // NOTE: large vec -> malloc uses mmap -> page-aligned -> madvise succeeds;
+        //       small vec -> heap allocation -> 16-byte aligned → madvise returns EINVAL -> fallback runs;
+        if (madvise(vec.data(), vec.capacity() * sizeof(T), MADV_POPULATE_WRITE) != 0) {
             // fallback
             volatile char* p = reinterpret_cast<char*>(vec.data());
-            std::size_t total_bytes = vec.capacity() * sizeof(vec);
+            std::size_t total_bytes = vec.capacity() * sizeof(T);
             auto PAGESIZE = sysconf(_SC_PAGESIZE);
             for (std::size_t i = 0; i < total_bytes; i += PAGESIZE) {
                 p[i] = 0;
             }
         } // madvise
     }
+}
+
+inline bool should_sample(std::uint64_t seq, std::int64_t stride) {
+    return stride > 0 && (seq & (stride - 1)) == 0;
 }
 }
