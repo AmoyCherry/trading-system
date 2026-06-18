@@ -91,6 +91,7 @@ int main(int argc, char** argv) {
     }
 
     {
+        // EOF not counted in csv
         ts::wire::Frame endf;
         ts::wire::encode(ts::proto::EndOfReplay{}, seq, endf);
         sock.send_to(endf.bytes_view(), peer);

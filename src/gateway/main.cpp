@@ -101,6 +101,9 @@ int main(int argc, char** argv) {
         }
 
         sock.send_to(frame.bytes_view(), lob_peer);
+        if (std::holds_alternative<ts::proto::EndOfReplay>(decoded->msg)) {
+            break;
+        }
 
         std::uint64_t t_after_send = 0;
         if (hit) {
@@ -108,10 +111,6 @@ int main(int argc, char** argv) {
             gwtses.emplace_back(decoded->seq, t_recv, t_before_send, t_after_send);
         }
         ++ forwarded;
-
-        if (std::holds_alternative<ts::proto::EndOfReplay>(decoded->msg)) {
-            break;
-        }
     }
 
     const auto& filename = std::format("{}/{}", dump_dir, "gwts.csv");
