@@ -67,6 +67,7 @@ N="${N:-2000000}"               # number of scenario units
 
 # Parse options using getopt
 PARSED=$(getopt -o "" --long cpu-core,perf,mode:,stride:,scenario:,n:,repeat:,ts: -- "$@") || exit 2
+eval set -- "$PARSED"
 while true; do
   case "$1" in
     --cpu-core) USE_IN_BINARY_AFFINITY=1; shift ;;
@@ -84,9 +85,9 @@ done
 
 # Unique tag per run; used in artifacts dir AND socket paths so concurrent
 # runs don't collide. $$ is the shell PID.
-DIR_PREFIX="${DIR_PREFIX:-matrix_}"
-if [[ "${REPEAT}" -eq 0 ]]; then
-  DIR_PREFIX="e2e3_"
+DIR_PREFIX="${DIR_PREFIX:-latency_}"
+if [[ "${PERF_MODE}" -eq 1 ]]; then
+  DIR_PREFIX="perf_"
 fi
 RUN_DIR="${OUT_DIR}/${DIR_PREFIX}${TS}/${SCENARIO}/${LOB_MODE}/repeat_${REPEAT}"
 mkdir -p "${RUN_DIR}"

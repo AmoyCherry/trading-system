@@ -75,6 +75,7 @@ set_env_hygiene() {
         done
     fi
 
+    # Set CPU turbo off
     echo "Disabling Intel Turbo Boost..."
     echo "1" | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo > /dev/null
 
@@ -85,17 +86,21 @@ set_env_hygiene || exit 1
 
 
 for scenario in "${SCENARIOS[@]}"; do
-    for mode in "${MODES[@]}"; do
-      for ((run=1; run<=REPEATS; run++)); do
+  for mode in "${MODES[@]}"; do
+    # non-perf only run in match mode
+    if [[ -z "${PERF_FLAG[@]}" && "$mode" != "match" ]]; then
+      continue
+    fi
 
-        echo "------------------ matrix ------------------------------"
-        echo "Running: Scenario=$scenario | Mode=$mode | Repeats=$REPEATS | N=$N | Stride=$STRIDE"
-        echo "------------------ matrix ------------------------------"
+    for ((run=1; run<=REPEATS; run++)); do
+      echo "------------------ matrix ------------------------------"
+      echo "Running: Scenario=$scenario | Mode=$mode | Repeats=$REPEATS | N=$N | Stride=$STRIDE"
+      echo "------------------ matrix ------------------------------"
 
-        "$SCRIPT_DIR"/run_3proc.sh --scenario "$scenario" --mode "$mode" --stride "$STRIDE" --n "$N" --repeat "$run" --cpu-core \
+      "$SCRIPT_DIR"/run_3proc.sh --scenario "$scenario" --mode "$mode" --stride "$STRIDE" --n "$N" --repeat "$run" --cpu-core \
                                    --ts "$TS" "${PERF_FLAG[@]}"
 
-        echo -e "\n"
-      done # repeat
-    done # mode
+      echo
+    done # repeat
+  done # mode
 done # scenario
