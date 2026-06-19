@@ -21,7 +21,7 @@ class CounterMetrics:
     branch_miss_rate: float
 
     # Source: exchange's send_throughput_msgs_per_s RESULT line
-    throughput: int
+    throughput: float | int
 
 @dataclass
 class RepeatIntervals:
@@ -59,6 +59,9 @@ class RepeatIntervalMetrics:
 
     w2w_p50: int; w2w_p99: int; w2w_max: int; w2w_mean: float
 
+"""
+Field explosion is inherent to the dataclass approach and acceptable. There is workaround but I don't do that considering over-engineering.
+"""
 @dataclass
 class LatencyCell:
     """
@@ -67,54 +70,61 @@ class LatencyCell:
     Otherwise, "engine get improved" is actually a system-wide perturbation (thermal, governor, noise) — the controls are how to prove the change is localized.
     """
 
-    # [mean, MAD, cv] # todo! change list[val] to dict[stat, val]
     # ex
-    ex_intvl_send_p50_stat: list[float] = field(default_factory=list)
-    ex_intvl_send_p99_stat: list[float] = field(default_factory=list)
-    ex_intvl_send_max_stat: list[float] = field(default_factory=list)
-    ex_intvl_send_mean_stat: list[float] = field(default_factory=list)
+    ex_intvl_send_p50_stat: Stats
+    ex_intvl_send_p99_stat: Stats
+    ex_intvl_send_max_stat: Stats
+    ex_intvl_send_mean_stat: Stats
     # gw
-    gw_intvl_decode_p50_stat: list[float] = field(default_factory=list)
-    gw_intvl_decode_p99_stat: list[float] = field(default_factory=list)
-    gw_intvl_decode_max_stat: list[float] = field(default_factory=list)
-    gw_intvl_decode_mean_stat: list[float] = field(default_factory=list)
+    gw_intvl_decode_p50_stat: Stats
+    gw_intvl_decode_p99_stat: Stats
+    gw_intvl_decode_max_stat: Stats
+    gw_intvl_decode_mean_stat: Stats
 
-    gw_intvl_send_p50_stat: list[float] = field(default_factory=list)
-    gw_intvl_send_p99_stat: list[float] = field(default_factory=list)
-    gw_intvl_send_max_stat: list[float] = field(default_factory=list)
-    gw_intvl_send_mean_stat: list[float] = field(default_factory=list)
+    gw_intvl_send_p50_stat: Stats
+    gw_intvl_send_p99_stat: Stats
+    gw_intvl_send_max_stat: Stats
+    gw_intvl_send_mean_stat: Stats
     # lob
-    lob_intvl_decode_p50_stat: list[float] = field(default_factory=list)
-    lob_intvl_decode_p99_stat: list[float] = field(default_factory=list)
-    lob_intvl_decode_max_stat: list[float] = field(default_factory=list)
-    lob_intvl_decode_mean_stat: list[float] = field(default_factory=list)
+    lob_intvl_decode_p50_stat: Stats
+    lob_intvl_decode_p99_stat: Stats
+    lob_intvl_decode_max_stat: Stats
+    lob_intvl_decode_mean_stat: Stats
 
-    lob_intvl_apply_p50_stat: list[float] = field(default_factory=list)
-    lob_intvl_apply_p99_stat: list[float] = field(default_factory=list)
-    lob_intvl_apply_max_stat: list[float] = field(default_factory=list)
-    lob_intvl_apply_mean_stat: list[float] = field(default_factory=list)
+    lob_intvl_apply_p50_stat: Stats
+    lob_intvl_apply_p99_stat: Stats
+    lob_intvl_apply_max_stat: Stats
+    lob_intvl_apply_mean_stat: Stats
     # transport
-    ex2gw_trans_p50_stat: list[float] = field(default_factory=list)
-    ex2gw_trans_p99_stat: list[float] = field(default_factory=list)
-    ex2gw_trans_max_stat: list[float] = field(default_factory=list)
-    ex2gw_trans_mean_stat: list[float] = field(default_factory=list)
+    ex2gw_trans_p50_stat: Stats
+    ex2gw_trans_p99_stat: Stats
+    ex2gw_trans_max_stat: Stats
+    ex2gw_trans_mean_stat: Stats
 
-    gw2lob_trans_p50_stat: list[float] = field(default_factory=list)
-    gw2lob_trans_p99_stat: list[float] = field(default_factory=list)
-    gw2lob_trans_max_stat: list[float] = field(default_factory=list)
-    gw2lob_trans_mean_stat: list[float] = field(default_factory=list)
+    gw2lob_trans_p50_stat: Stats
+    gw2lob_trans_p99_stat: Stats
+    gw2lob_trans_max_stat: Stats
+    gw2lob_trans_mean_stat: Stats
 
-    w2w_p50_stat: list[float] = field(default_factory=list)
-    w2w_p99_stat: list[float] = field(default_factory=list)
-    w2w_max_stat: list[float] = field(default_factory=list)
-    w2w_mean_stat: list[float] = field(default_factory=list)
+    w2w_p50_stat: Stats
+    w2w_p99_stat: Stats
+    w2w_max_stat: Stats
+    w2w_mean_stat: Stats
 
 @dataclass
 class PerfCell:
     # perf counters
-    ipc_stat: list[float] = field(default_factory=list)
-    cycle_per_msg_stat: list[float] = field(default_factory=list)
-    cache_miss_rate_stat: list[float] = field(default_factory=list)
-    branch_miss_rate_stat: list[float] = field(default_factory=list)
+    ipc_stat: Stats
+    cycle_per_msg_stat: Stats
+    cache_miss_rate_stat: Stats
+    branch_miss_rate_stat: Stats
 
-    throughput_stat: list[float] = field(default_factory=list)
+    throughput_stat: Stats
+
+@dataclass
+class Stats:
+    mean: float
+    std: float
+    median: float
+    mad: float
+    robust_cv: float
