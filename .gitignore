@@ -1,6 +1,8 @@
 .idea
 artifacts
 .venv
+**/__pycache__/
+**.pyc
 
 # Prerequisites
 *.d
