@@ -43,8 +43,8 @@ import pandas as pd
 
 from scripts.stat.models import RepeatIntervals, LatencyCell, Stats
 from scripts.stat.tools import get_val_from_log, med_mad, ROOT_DIR, load_counter_metrics, calc_interval_metrics, \
-    stat_perf_repeats, med_quad_delta, decomp, write_source, stat_latency_repeats, estimate_gate_noise, write_md_table, \
-    DECOMP_DOC, HEADLINE_DOC, NOISE_DOC
+    stat_perf_repeats, decomp, write_source, stat_latency_repeats, estimate_gate_noise, write_md_table, \
+    DECOMP_DOC, HEADLINE_DOC, NOISE_DOC, median_delta_with_ci
 
 SCENARIOS = ["cross", "add", "cancel"]
 MODES = ["null", "decode", "match"]
@@ -103,6 +103,7 @@ with open(latency_summary_path, "w") as latency_sum, open(perf_summary_path, "w"
 
     for s in SCENARIOS:
         si = SCENARIOS.index(s)
+        scen_perf_cell_metrics = {}
         scen_perf_cells = {}
         for m in MODES:
             latency_metrics_repeats = []
@@ -120,6 +121,7 @@ with open(latency_summary_path, "w") as latency_sum, open(perf_summary_path, "w"
                 # ['mean', 'std', 'median', mad, cv]
                 stats = getattr(perf_cell, f.name)
                 perf_sum.write(f"{s},{m},{f.name},{stats.mean},{stats.std},{stats.median},{stats.mad},{stats.robust_cv}\n")
+            scen_perf_cell_metrics[m] = counter_metrics_repeats
             scen_perf_cells[m] = perf_cell
 
             if m == "match":
@@ -132,8 +134,8 @@ with open(latency_summary_path, "w") as latency_sum, open(perf_summary_path, "w"
                 headline['throughput(M/s)'][si] = med_mad(perf_cell.throughput_stat, 1e6)
                 headline['p99_lob_apply(ns)'][si] = med_mad(latency_cell.lob_intvl_apply_p99_stat)
                 headline['p99_w2w(ms)'][si] = med_mad(latency_cell.w2w_p99_stat, 1e6)
-                headline['lob_engine cyc/msg'][si] = med_quad_delta(scen_perf_cells, 'cycle_per_msg_stat', 'match', 'decode')
-                headline['lob_codec cyc/msg'][si] = med_quad_delta(scen_perf_cells, 'cycle_per_msg_stat', 'decode', 'null')
+                headline['lob_engine cyc/msg, 95% CI'][si] = median_delta_with_ci("cycle_per_msg", scen_perf_cell_metrics["match"], scen_perf_cell_metrics["decode"])
+                headline['lob_codec cyc/msg, 95% CI'][si] = median_delta_with_ci("cycle_per_msg", scen_perf_cell_metrics["decode"], scen_perf_cell_metrics["null"])
                 headline['floor cyc/msg'][si] = med_mad(scen_perf_cells['null'].cycle_per_msg_stat)
                 # View - latency decomp & noise floor
                 decomp(decomps[s], latency_cell)
@@ -141,8 +143,9 @@ with open(latency_summary_path, "w") as latency_sum, open(perf_summary_path, "w"
 
 view_path = summary_path / "view.md"
 with open(view_path, "w") as view:
-    write_md_table(view, "## Headline\n", headline)
+    view.write("## Headline\n")
     view.write(HEADLINE_DOC)
+    write_md_table(view, "\n", headline)
 
     view.write("## W2W Latency Decomposition\n")
     view.write(DECOMP_DOC)

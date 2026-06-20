@@ -3,8 +3,9 @@ import math
 import pandas as pd
 import numpy as np
 import json
-from dataclasses import dataclass, field, fields
+from dataclasses import fields
 from pathlib import Path
+from scipy.stats import bootstrap
 
 from scripts.stat.models import RepeatIntervals, RepeatIntervalMetrics, PerfCell, LatencyCell, CounterMetrics, Stats
 
@@ -187,17 +188,20 @@ def med_mad(stats: Stats, div = 1) -> str:
     # ['mean', 'std', 'median', mad, cv]
     return f"{(stats.median / div):.2f} ± {(stats.mad / div):.2f}"
 
-def med_quad_delta(scen_perf_cells: dict[str, PerfCell], metric_name: str, mode_l: str, mode_s: str) -> str:
-    metrics_l = getattr(scen_perf_cells[mode_l], metric_name)
-    metrics_s = getattr(scen_perf_cells[mode_s], metric_name)
+def median_delta_with_ci(metric_name: str, metrics_repeats_l: list[CounterMetrics], metrics_repeats_s: list[CounterMetrics], ci_lvl = 0.95) -> str:
+    metric_arr_l = [getattr(metrics, metric_name) for metrics in metrics_repeats_l]
+    metric_arr_s = [getattr(metrics, metric_name) for metrics in metrics_repeats_s]
+    actual_delta = np.median(metric_arr_l) - np.median(metric_arr_s)
 
-    med_l = metrics_l.median
-    med_s = metrics_s.median
+    SEED = 97
+    rng = np.random.default_rng(SEED)
+    delta_lbd = lambda l, s: np.median(l) - np.median(s)
+    res = bootstrap((metric_arr_l, metric_arr_s),
+                    delta_lbd,
+                    rng=rng,
+                    confidence_level=ci_lvl)
 
-    std_l = metrics_l.std
-    std_s = metrics_s.std
-
-    return f"{(med_l - med_s):.3f} ± {math.hypot(std_l, std_s):.3f}"
+    return f"{actual_delta:.2f}, [{res.confidence_interval.low:.2f}, {res.confidence_interval.high:.2f}]"
 
 def decomp(cols: dict[str, list], latency_cell: LatencyCell):
     # ['mean', 'std', 'median', mad, cv]
@@ -237,22 +241,38 @@ def write_source(path: str):
         f.write(str(latest_perf_dir))
 
 HEADLINE_DOC = """
-Two families, `mean-std` and `med-mad` to stat (center ± spread) and cv.
-We (me) choose `med-mad` because 
+The stats data presented in `center ± spread` is `median ± mad`.
+> Two families, `mean-std-cv` and `med-mad-robustc cv`, to stat (center ± spread) and data variance.
+> We (me) choose the `med` family because:
+> 1. `Mean` is more sensible to "bad tails" and "spikes" produced by corrupted runs, especially in a small sample. While `median` has 50% *Breakdown Point* to tolerate these corrupted runs data points.
+> 2. `mean` is much efficient when the data is a clear Gaussian distribution. While with 10, 20 or 30 data points, we can not find a symmetric bell curve.
+
+**`engine cyc/msg`**
+
+Cross-mode delta is guarded by **bootstrapping**.
+
+Match/decode/null produce three experimental sets under each scenario. They're used to attribute perf counters to engine by calculating the deltas between two sets per counter. And we must go with **CI** to calculate the uncertainty when dealing with deltas.
+
+There is a closed-form formula `Welch's t-test` for `mean` to calculate CI. But the above two arguments about `mean` is still valid here. So we continue with median for deltas.
+
+Hodges-Lehmann CI is a CI for differences between two sets, it calculates the diff of every possible elem pair between two sets to get a `n * n` difference array, then return the median. But it assumes that the two sets have the identical shape and only different in location shift. With 10, 20 or 30 samples, it's even hard to define a shape.
+
+Bootstrapping drops the shape assumptions.  
+
+CI is presented in `point estimate, % CI [low, hi]`, where point est is `median delta`.
 """
 
 DECOMP_DOC = """
 w2w decomp to answer which stage dominates the w2w latency and should be optimized.
 
 > Why use `mean` to decompose?
-
-> - Mathematics correctness. Percentiles (p99) are not **additive**, but `mean` is. `sigma(stage_mean) = w2w_mean`. But `sigma(stage_p99) != w2w_p99`.
-> - The problem scope. LLN and CLT tell that `mean` is a high-quality metric when the repeats and samples large enough. But that's about estimator quality, w2w decomp is to telescope stage percentages.
-> - That's doesn't mean to `mean` is perfect for this problem. It's influenced by bad tails compare the median for not-that-large samples, but it's additive while median not. No Free Lunch, regarding engineering for every step we must determine what to sacrifice.
+> - Mathematics correctness. Percentiles (p99) are not **additive**, but `mean` is. `sigma(stage_mean) == w2w_mean`. But `sigma(stage_p99) != w2w_p99`.
+> - The problem scope. LLN and CLT tell that `mean` is a high-quality metric when the repeats and samples large enough. But that's about estimator quality (why we didn't choose `mean` in Headline), w2w decomp is used to telescope stage percentages.
+> - That's doesn't mean to `mean` is perfect for this problem. It's influenced by bad tails compare with median in a not-that-large sample, but it's additive while median not. No Free Lunch, regarding engineering for every step we must determine what to sacrifice.
 """
 
 NOISE_DOC = """
-> Unbiased Robust CV. The truth variance is systematically underestimated when dealing with a small sample instead of the population (a infinite set in this case). While Bessel Correction (DDOF = 1) is for the mean family, we can use **Finite-sample Bias-correction Factors** to slightly expand the mad and robust cv.
+> **Unbiased Robust CV**. The truth variance is systematically underestimated when dealing with a limited sample instead of the population (it's a infinite set in this case). While Bessel Correction (DDOF = 1) is for the `mean` family, we can use **Finite-sample Bias-correction Factors** to slightly expand the `mad` and `robust cv`.
 >
 > For repeats N = 10, define `Unbiased Robust CV = 1.4826 * 1.039 * mad / med`. Where `1.4826` is the Fisher-consistency constant and `1.039` is finite-sample bias-correction factor b(n) when n == 10.
 """
