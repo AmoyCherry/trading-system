@@ -18,6 +18,9 @@
 # `taskset -c <N>`. For *clean* numbers you also need governor=performance,
 # Turbo off, and ideally isolcpus= for the pinned cores
 # (see docs/experiments/000_template.md, "Environment").
+#
+# E.g.: ./scripts/run_e2e_3proc.sh --scenario cross/add/cancel --mode null/decode/match --stride 16 --n 2000000 --repeat 1 --cpu-core
+#
 # =============================================================================
 
 set -euo pipefail
@@ -29,25 +32,12 @@ set -euo pipefail
 # Resolve the script's own dir, then cd to the repo root. This lets the
 # script run from anywhere ("./scripts/run_e2e_3proc.sh", "bash scripts/...", etc.).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 # Env-overridable knobs use the ${VAR:-default} idiom: VAR if set, else default.
 BUILD_DIR="${BUILD_DIR:-build}"
 OUT_DIR="${OUT_DIR:-artifacts/results}"
-
-# Unique tag per run; used in artifacts dir AND socket paths so concurrent
-# runs don't collide. $$ is the shell PID.
-TS="$(date +%Y%m%d_%H%M%S)_$$"
-RUN_DIR="${OUT_DIR}/e2e3_${TS}"
-mkdir -p "${RUN_DIR}"
-
-# --- socket paths ------------------------------------------------------------
-# UDS pathname sockets, namespaced by TS, cleaned up in trap below.
-BASE="/tmp/ts_${TS}"
-EXCH="${BASE}_exch.sock"
-GW="${BASE}_gw.sock"
-LOB="${BASE}_lob.sock"
 
 # --- binaries ----------------------------------------------------------------
 LOB_BIN="${BUILD_DIR}/src/lobd/lobd"
@@ -60,46 +50,54 @@ EX_BIN="${BUILD_DIR}/src/exchange/exchange_sim"
 
 USE_IN_BINARY_AFFINITY=0
 POSITIONAL=()
-LOB_CORE="${LOB_CORE:-2}"
-GW_CORE="${GW_CORE:-3}"
+# On Intel 13th Gen i7-1360P hybrid: cpu_core (P-cores) = CPUs 0–7, cpu_atom (E-cores) = CPUs 8–15,
+# only can use 0-7 P-cores
+LOB_CORE="${LOB_CORE:-0}"
+GW_CORE="${GW_CORE:-2}"
 EX_CORE="${EX_CORE:-4}"
+LOB_MODE="${LOB_MODE:-NONE}"     # MUST choose null | decode | match
+STRIDE="${STRIDE:- -1}"
+REPEAT="${REPEAT:-0}"
+TS="$(date +%Y%m%d_%H%M%S)_$$"
+PERF_MODE=0
+PERF_PREFIX=()
 
-while [[ $# -gt 0 ]]; do
+SCENARIO="${SCENARIO:-cross}"          # cross | add_only | cancel_heavy
+N="${N:-2000000}"               # number of scenario units
+
+# Parse options using getopt
+PARSED=$(getopt -o "" --long cpu-core,perf,mode:,stride:,scenario:,n:,repeat:,ts: -- "$@") || exit 2
+eval set -- "$PARSED"
+while true; do
   case "$1" in
-    # Form A: `--cpu-core *`  (flag + anything)
-    --cpu-core)
-      USE_IN_BINARY_AFFINITY=1
-      shift
-      ;;
-
-    # End-of-options marker: everything after is positional, even if it
-    # starts with `--`. Standard POSIX convention.
-    --)
-      shift
-      POSITIONAL+=("$@")
-      break
-      ;;
-
-    # Unknown flag: fail loudly. Better than silently passing through.
-    --*)
-      echo "unknown flag: $1" >&2
-      exit 2
-      ;;
-
-    # Plain positional
-    *)
-      POSITIONAL+=("$1")
-      shift
-      ;;
+    --cpu-core) USE_IN_BINARY_AFFINITY=1; shift ;;
+    --perf)     PERF_MODE=1;              shift ;;
+    --mode)     LOB_MODE="$2";            shift 2 ;;
+    --stride)   STRIDE="$2";              shift 2 ;;
+    --scenario) SCENARIO="$2";            shift 2 ;;
+    --n)        N="$2";                   shift 2 ;;
+    --repeat)   REPEAT="$2";              shift 2 ;;
+    --ts)       TS="$2";                  shift 2 ;;
+    --)         shift; break ;;
+    *)          echo "Args error"; exit 3 ;;
   esac
 done
 
-# Replace $@ with just the positionals. Now $1, $2, ... are clean.
-set -- "${POSITIONAL[@]}"
+# Unique tag per run; used in artifacts dir AND socket paths so concurrent
+# runs don't collide. $$ is the shell PID.
+DIR_PREFIX="${DIR_PREFIX:-latency_}"
+if [[ "${PERF_MODE}" -eq 1 ]]; then
+  DIR_PREFIX="perf_"
+fi
+RUN_DIR="${OUT_DIR}/${DIR_PREFIX}${TS}/${SCENARIO}/${LOB_MODE}/repeat_${REPEAT}"
+mkdir -p "${RUN_DIR}"
 
-# Phase 2: assign positionals exactly as you already do.
-SCENARIO="${1:-cross}"          # cross | add_only | cancel_heavy
-N="${2:-2000000}"               # number of scenario units
+# --- socket paths ------------------------------------------------------------
+# UDS pathname sockets, namespaced by TS, cleaned up in trap below.
+BASE="/tmp/ts_${TS}"
+EXCH="${BASE}_exch.sock"
+GW="${BASE}_gw.sock"
+LOB="${BASE}_lob.sock"
 
 # Resolve the taskset prefix once, as a bash array. When USE_IN_BINARY_AFFINITY
 # and expands to nothing in the launch commands below.
@@ -125,6 +123,11 @@ else
   GW_PREFIX=(taskset -c "${GW_CORE}")
   EX_PREFIX=(taskset -c "${EX_CORE}")
   echo "taskset -c pinning: lobd=core${LOB_CORE} gateway=core${GW_CORE} exchange=core${EX_CORE}"
+fi
+
+if [[ "${PERF_MODE}" -eq 1 ]]; then
+  PERF_PREFIX=(perf stat -e cycles,instructions,branches,branch-misses,cache-references,cache-misses -p)
+  STRIDE=0
 fi
 
 # --- timeouts ----------------------------------------------------------------
@@ -209,14 +212,21 @@ log_affinity() {
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_PREFIX[@]}" "${LOB_BIN}" --local "${LOB}" "${LOB_CPU[@]}" \
+"${LOB_PREFIX[@]}" "${LOB_BIN}" --mode "${LOB_MODE}" --stride "${STRIDE}" "${LOB_CPU[@]}" \
+  --local "${LOB}" --msgs "${N}" --dump "${RUN_DIR}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
+if [[ "${PERF_MODE}" -eq 1 ]]; then
+  # lobd is idle on recv
+  "${PERF_PREFIX[@]}" "${LOB_PID}" 2> "${RUN_DIR}/perf_stat.log" &
+  PERF_PID=$!
+fi
 log_affinity "${LOB_PID}" "lobd"
 
 # 2. gateway  --- binds, dials lobd.
-"${GW_PREFIX[@]}" "${GW_BIN}" --local "${GW}" --to-lob "${LOB}" "${GW_CPU[@]}" \
+"${GW_PREFIX[@]}" "${GW_BIN}" --stride "${STRIDE}" "${GW_CPU[@]}" \
+  --local "${GW}" --to-lob "${LOB}" --msgs "${N}" --dump "${RUN_DIR}"  \
   > "${RUN_DIR}/gateway.log" 2>&1 &
 GW_PID=$!
 wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
@@ -228,13 +238,19 @@ log_affinity "${GW_PID}" "gateway"
 echo "running exchange_sim: scenario=${SCENARIO} n=${N}"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
-  "${EX_PREFIX[@]}" "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" \
+  "${EX_PREFIX[@]}" "${EX_BIN}" --stride "${STRIDE}" \
+    --local "${EXCH}" --to-gateway "${GW}" --dump "${RUN_DIR}" \
     --scenario "${SCENARIO}" --n "${N}" "${EX_CPU[@]}" \
   | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in
 # the first slot of PIPESTATUS (an array of every pipe stage's exit code).
 EX_STATUS=${PIPESTATUS[0]}
 set -e
+
+if [[ "${PERF_MODE}" -eq 1 && -n "$PERF_PID" ]]; then
+  echo "Waiting for perf to finish writing stats..."
+  wait "$PERF_PID"
+fi
 
 case "${EX_STATUS}" in
   0)   ;;  # OK
@@ -268,3 +284,20 @@ grep -E '^(STATS|RESULT)' "${RUN_DIR}/lobd.log" || echo "(no STATS/RESULT line)"
 
 echo
 echo "RUN_DIR=${RUN_DIR}"
+
+# --- provenance ------------------------------------------------------------------
+cat > "${RUN_DIR}/config.json" <<EOF
+{
+  "scenario":"${SCENARIO}","mode":"${LOB_MODE}","n":${N},"stride":${STRIDE},
+  "repeat":${REPEAT},"perf":${PERF_MODE},"ts":"${TS}",
+  "cores":{"lob":${LOB_CORE},"gw":${GW_CORE},"ex":${EX_CORE}},
+  "affinity":"$([[ $USE_IN_BINARY_AFFINITY -eq 1 ]] && echo in-binary || echo taskset)",
+  "git_commit":"$(git rev-parse --short HEAD)",
+  "git_dirty":$(git diff --quiet && echo false || echo true),
+  "cpu_model":"$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | xargs)",
+  "kernel":"$(uname -r)",
+  "governor":"$(cat /sys/devices/system/cpu/cpu${LOB_CORE}/cpufreq/scaling_governor)",
+  "no_turbo":$(cat /sys/devices/system/cpu/intel_pstate/no_turbo),
+  "perf_event_paranoid":$(cat /proc/sys/kernel/perf_event_paranoid)
+}
+EOF

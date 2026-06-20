@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+# sudo sysctl -w kernel.perf_event_paranoid=-1
+
 set -euo pipefail
 
 BUILD_DIR="${BUILD_DIR:-build}"
