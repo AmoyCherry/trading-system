@@ -1,3 +1,6 @@
+(1) saturation/offered-load, (2) jitter→isolation, (3) stride necessity, (4) pre-fault necessity, (5) phrasing.
+
+
 Problem 1: ex2gw is saturated over 96% in w2w decomp.
 Question:
 1. Why gw2lob not saturated?
