@@ -249,17 +249,12 @@ The stats data presented in `center ± spread` is `median ± mad`.
 
 **`engine cyc/msg`**
 
-Cross-mode delta is guarded by **bootstrapping**.
+Cross-mode delta is calculated by `med(match) - med(decode)` and is guarded by **CI**. The CI is calculated by  **bootstrapping**.
 
-Match/decode/null produce three experimental sets under each scenario. They're used to attribute perf counters to engine by calculating the deltas between two sets per counter. And we must go with **CI** to calculate the uncertainty when dealing with deltas.
+To calculate the deltas between two exprtl sets per counter, we must go with CI to calculate the uncertainty.
 
-There is a closed-form formula `Welch's t-test` for `mean` to calculate CI. But the above two arguments about `mean` is still valid here. So we continue with median for deltas.
-
-Hodges-Lehmann CI is a CI for differences between two sets, it calculates the diff of every possible elem pair between two sets to get a `n * n` difference array, then return the median. But it assumes that the two sets have the identical shape and only different in location shift. With 10, 20 or 30 samples, it's even hard to define a shape.
-
-Bootstrapping drops the shape assumptions.  
-
-CI is presented in `point estimate, % CI [low, hi]`, where point est is `median delta`.
+- The above two arguments about `mean` is still valid here. So we continue with median for deltas.
+- Hodges-Lehmann CI is a CI for differences between two sets, it calculates the diff of every possible elem pair between two sets to get a `n * n` difference array, then return the median. But it assumes that the two sets have the identical shape and only different in location shift. With 10, 20 or 30 samples, it's even hard to define a shape.
 """
 
 DECOMP_DOC = """
