@@ -3,6 +3,7 @@ artifacts
 .venv
 **/__pycache__/
 **.pyc
+agent-shared-context/
 
 # Prerequisites
 *.d
