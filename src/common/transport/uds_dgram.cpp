@@ -70,10 +70,9 @@ std::size_t UdsDgramSocket::recv_into(std::span<std::byte> buf, Peer& from) {
   const auto n = ::recvfrom(fd_,
                            buf.data(),
                            buf.size(),
-                           0,
+                           MSG_DONTWAIT,
                            reinterpret_cast<sockaddr*>(&from.addr),
                            &from.len);
-  if (n < 0) throw_errno("recvfrom");
   return static_cast<std::size_t>(n);
 }
 
