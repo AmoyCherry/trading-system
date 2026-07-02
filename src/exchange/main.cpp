@@ -84,7 +84,8 @@ int main(int argc, char** argv) {
         sock.send_to(frame.bytes_view(), peer);
 
         if (hit) {
-            const uint64_t after_send = ts::time::now_ns();
+            const auto after_send = ts::time::now_ns();
+            while (ts::time::now_ns()  - before_send < ts::time::T) { }
             extses.emplace_back(seq, before_send, after_send);
         }
         ++seq;
