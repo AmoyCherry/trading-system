@@ -77,7 +77,18 @@ int main(int argc, char** argv) {
         ts::wire::Frame frame{};
         ts::transport::Peer from{};
         std::uint64_t t_recv = 0;
-        const auto n = sock.recv_into(frame.writable(), from);
+        auto n = sock.recv_into(frame.writable(), from);
+        while (true) {
+            if (n > 0) {
+                break;
+            }
+            if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                    continue;
+                }
+            }
+            n = sock.recv_into(frame.writable(), from);
+        }
         const bool hit = ts::stats::should_sample(cnt++, stride);
         if (hit) {
             t_recv = ts::time::now_ns();
