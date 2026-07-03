@@ -1,19 +1,19 @@
 > Headline:
 > 
-> The apparent 614 µs transport was queueing time; true transport is 3.0 µs blocking / 1.17 µs busy-poll; the engine is 134–218 ns; busy-poll avoids cache cold down due to idle.
+> The apparent 614 µs transport was queueing time; true transport is 3.0 µs blocking / 1.17 µs busy-poll; the engine is 134–218 ns; busy-poll keeps the consumer cores hot and removes most blocking wake-up jitter.
 > 
 > setup:
 > 
 > - 2M msgs × 10 repeats × 3 scenarios
 > 
-> - pinned P-cores, no-turbo, 
+> - pinned P-cores, no turbo
 > 
 > - median±MAD, MDE gate
 
 ## Observe - What's wrong?
 I build two measurement tools - stage timestamps and perf counter attribution. And I built a w2w decomposition table to find the bottleneck in the w2w.
 
-In the [M7-baseline](../../artifacts/summary/M7-baseline/view.md) run, The `ex2gw` is the largest interval and dominates over 96% (614 us) latency portion in the entire trip in all three scenarios. While another UDS trans `gw2lob` is normal, and the matching engine (lob_apply) stage is about invisible (0.23 us).
+In the [M7-baseline](./M7-baseline) run, The `ex2gw` is the **largest interval** and **dominates over 96% (614 us)** latency portion in the entire trip in all three scenarios. While another UDS trans `gw2lob` is normal, and the matching engine (lob_apply) stage is about invisible (0.23 us).
 ### cross
 | metric                     |   median (ns) |   mad (ns) |   robust cv | %w2w    |
 |:---------------------------|--------------:|-----------:|------------:|:--------|
@@ -66,63 +66,67 @@ To find the start point of the pacing gap, considering the `gw` consists of `rec
 
 ### `cross` results
 
-The table shows `median` of `ex2gw_trans_{metric}_stat` (the same reason to the Headline). 
+The table shows `median ± MAD` of `ex2gw_trans_{metric}_stat` (the same reason to the Headline).
 
 For the within-run metric, I pick up the `p50` to analyze. Because the question I want to answer is "Whether messages pile up waiting in line at the gateway's socket buffer (the queue). At saturation that mechanism influence almost every message". So I need the typical latency, which is `p50`.
 - `p99` and `max` only consider the few msg at the tail, not the typical latency that can reflect "almost every msg influenced by something"
 - `mean` also can not answer the question. Although it's calculated by 2 million msg latencies, that just makes `mean` value precisely absorbs both the typical latencies and the tail. So it's not the pure typical latency, the `mean` value folded tail mechanism into the number such as OS preemption which I didn't enable `isolcpus` during this experiment.  
 
-| T (µs)   | p50 (ns) (typical) | p99 (ns)  | max (ns)    | mean (ns) |
-|:---------|-------------------:|----------:|------------:|----------:|
-| baseline |           ~613,000 | 1,073,870 | ~30,000,000 |   614,271 |
-| 4        |              4,001 | 1,100,889 |  28,993,319 |    60,357 |
-| 6        |              3,063 |    89,868 |  28,508,483 |    17,654 |
-| 7        |              3,002 |    37,928 |  28,258,058 |    16,825 |
-| 8        |              3,366 |   129,246 |  28,124,868 |    19,736 |
-| 9        |              3,096 |    71,669 |  27,564,175 |    19,834 |
-| 10       |              3,311 |    20,747 |  27,430,808 |    16,232 |
-| 11       |              3,366 |     7,814 |  27,258,212 |    13,583 |
-| 12       |              3,357 |     8,198 |  27,089,716 |    14,011 |
+| T (µs)   | p50 (ns) (typical) | p99 (ns)       | max (ns)           | mean (ns)      |
+|:---------|-------------------:|---------------:|-------------------:|---------------:|
+| baseline |   614,949 ± 3,461 | 1,073,870 ± 43,091 | 30,378,110 ± 317,656 | 614,271 ± 9,558 |
+| 4        |       4,001 ± 318 | 1,100,889 ± 220,692 | 28,993,320 ± 141,928 | 60,357 ± 26,706 |
+| 5        |       3,162 ± 115 | 1,240,550 ± 221,060 | 28,476,348 ± 121,618 | 48,675 ± 26,862 |
+| 6        |        3,063 ± 42 |    89,868 ± 42,694 | 28,508,483 ± 129,012 | 17,654 ± 2,064 |
+| 7        |        3,002 ± 35 |    37,928 ± 30,208 | 28,258,058 ± 176,748 | 16,825 ± 1,921 |
+| 8        |        3,366 ± 12 |   129,246 ± 110,636 | 28,124,868 ± 130,592 | 19,736 ± 4,474 |
+| 9        |        3,096 ± 10 |    71,669 ± 18,448 | 27,564,176 ± 64,690  | 19,834 ± 2,820 |
+| 10       |         3,311 ± 9 |     20,747 ± 8,616 | 27,430,808 ± 276,724 | 16,232 ± 856 |
+| 11       |       3,366 ± 24  |      7,814 ± 966   | 27,258,212 ± 146,112 | 13,583 ± 420 |
+| 12       |        3,358 ± 16 |      8,198 ± 1,412 | 27,089,716 ± 132,904 | 14,011 ± 1,014 |
 
-
-### `cross` results — non-blocking `recvfrom` (positive control)
-
-Same pacing sweep; `gw`/`lob` use non-blocking `recvfrom` (`MSG_DONTWAIT`, busy-wait) so the consumer never sleeps and the core stays hot.
-
-| T (µs)   | p50 (ns) (typical) | p99 (ns) | max (ns)    | mean (ns) |
-|:---------|-------------------:|---------:|------------:|----------:|
-| baseline |            532,395 |  919,890 |  30,286,566 |   526,635 |
-| 4        |              1,168 |  774,208 |  29,471,004 |    23,926 |
-| 6        |              1,163 |    1,721 |  28,856,102 |     8,835 |
-| 7        |              1,166 |    1,714 |  29,235,374 |     8,376 |
-| 9        |              1,170 |    1,690 |  27,546,572 |     7,170 |
-| 11       |              1,174 |    1,665 |  27,264,738 |     6,752 |
-| 12       |              1,168 |    1,656 |  26,866,969 |     6,536 |
-
-`lob_apply` p50 (ns) — blocking vs non-blocking (the positive control):
-
-| T (µs)       |   4 |   6 |   7 |   8 |   9 |  10 |  11 |  12 |
-|:-------------|----:|----:|----:|----:|----:|----:|----:|----:|
-| blocking     | 156 | 190 | 191 | 198 | 216 | 214 | 218 | 218 |
-| non-blocking | 134 | 134 | 135 |  —  | 134 |  —  | 135 | 136 |
 
 ### Conclusion
 **Matches hypothesis**
 
-The typical time of `ex2gw` dropped from the baseline `~613 us` to the lowest `~3 us` and stayed above there, where the queue was removed.
+The typical time of `ex2gw` dropped from the baseline `~613 us` to the lowest `~3.0 us` and stayed above there, where the queue was removed.
 
 The knee is around `6us` where the median of `ex2gw` `p50` latency drops to `3.0 us`.
 
 **Not matches hypothesis**
 
-`median(ex2gw_trans_p50_stat)` jumped to `~3.3 us`, when continuously increasing the sending gap after `T = 7us`.
+After the queue was removed around `T = 6-7us`, `median(ex2gw_trans_p50_stat)` did not stay perfectly flat; it moved in a narrow band around `3.0-3.37 us`.
 
-After the queuing time was removed at `T = 7us`, further larger producing gap lets downstream consumers have more time to wait msgs. When using blocking `recvfrom` that enters the kernel and sleeps until a new msg arrives, if no other runnable work is on the cpu, the kernel can run the idle task and enter C-States. The larger sending gap, the longer sleeping time in kernel if using blocking IO, and more change to enter the deeper idle power states (C-States). When entering C3 and above, the cache will be flushed. Hot cache lines can be evicted.
+Further larger producing gaps let downstream consumers wait longer between messages. With blocking `recvfrom`, the consumer enters the kernel and can sleep until the next message arrives. If no other runnable work is on that CPU, the kernel can run the idle task and may enter deeper idle power states. The larger the sending gap, the more likely the consumer sees an idle-state side effect: wake-up work, post-idle frequency settling, and even cache flushing when entering into the C3 state.
 
 > Note, when using cpu pinning + isolcpus for a single-threaded process, the cpu can still run the idle task (pid = 0).
 
+Verify: I was indeed using blocking `recvfrom` initially because all three processes are single-threaded. Then I ran an A/B test using non-blocking `recvfrom` (`MSG_DONTWAIT`) with blocking `sendto`.
 
-Verify: I was indeed using a blocking `recvfrom` initially because all three processes are single-threaded process. Then I used an A/B test that using non-blocking `recvfrom` (with flag `MSG_DONTWAIT`) with blocking `sendto`.
+### `cross` results — non-blocking `recvfrom` (positive control)
+
+Same pacing sweep; `gw`/`lob` use non-blocking `recvfrom` (`MSG_DONTWAIT`, busy-wait) so the consumer never sleeps and the core stays hot.
+
+| T (µs)   | p50 (ns) (typical) | p99 (ns)     | max (ns)           | mean (ns)     |
+|:---------|-------------------:|-------------:|-------------------:|--------------:|
+| baseline | 532,395 ± 5,182 | 919,890 ± 24,083 | 30,286,566 ± 341,732 | 526,635 ± 6,708 |
+| 4        |   1,168 ± 10    | 774,208 ± 286,441 | 29,471,004 ± 150,166 | 23,926 ± 7,417 |
+| 6        |   1,163 ± 10    |   1,721 ± 63      | 28,856,102 ± 118,908 | 8,835 ± 746 |
+| 7        |   1,166 ± 14    |   1,714 ± 80      | 29,235,374 ± 92,511  | 8,376 ± 399 |
+| 9        |    1,170 ± 9    |   1,690 ± 47      | 27,546,572 ± 168,194 | 7,170 ± 164 |
+| 11       |    1,174 ± 4    |   1,665 ± 23      | 27,264,738 ± 183,772 | 6,752 ± 41 |
+| 12       |   1,168 ± 16    |   1,656 ± 80      | 26,866,969 ± 151,382 | 6,536 ± 39 |
+
+`lob_apply` p50 (ns) — blocking vs non-blocking (the positive control), shown as `median ± MAD`:
+
+| T (µs)       |   4 |   5 |   6 |   7 |   8 |   9 |  10 |  11 |  12 |
+|:-------------|----:|----:|----:|----:|----:|----:|----:|----:|----:|
+| blocking     | 156 ± 0 | 164 ± 1 | 190 ± 0 | 191 ± 0 | 198 ± 5 | 216 ± 2 | 214 ± 4 | 218 ± 2 | 218 ± 2 |
+| non-blocking | 134 ± 1 | — | 134 ± 0 | 135 ± 1 | — | 134 ± 1 | — | 135 ± 0 | 136 ± 1 |
+
+The matching engine in `lobd` shows the same direction under a larger sending gap: `median(lob_intvl_apply_p50_stat)` increases from `0.15 us` to `0.21 us`. That interval is pure in-process work after `recvfrom` has returned, so it does not include socket queueing or the direct blocking wait. When switching to non-blocking `recvfrom`, the core stays hot and `lob_apply` p50 stays flat. 
+
+This positive control supports the idle/cold-core explanation, but it does not isolate cache effects from frequency settling.
 
 ------
 
@@ -132,13 +136,9 @@ Verify: I was indeed using a blocking `recvfrom` initially because all three pro
 
 > Why the jump from `3.0 us` to `3.3` is not because longer sleeping time causes more OS preemption?
 >
-> OS preemption on `gw` can cause cache flushing and form a small queue. But it is rare and can only affect the tails such as `p99/max`, cannot move `p50` unless the OS preemption can affect `>50%` of messages. 
-> 
-> The recorded throughput in `ex` is `~260K/sec`, which is `~3.8 us/msg`, to affect over 50% msgs, the OS preemption frequency should be faster than `7.8 us`, so that processing two msg in `ex` will have at least one msg encounter an OS preemption.
+> OS preemption on `gw` can form a short queue, but it is rare and should mainly affect tails such as `p99/max`. It cannot move `p50` unless it affects `>50%` of messages.
 
-The matching engine in lob has a similar effect under a larger sending gap. `median(lob_intvl_apply_p50_stat)` increases from `0.15 us` to `0.21 us` smoothly. By using non-blocking `recvfrom`, the medians of the matching engine percentile latencies keep unchanged which conform to my hypothesis. 
-
-Waiting in the queue, idle power states and cache coldness are two distinct mechanism. This case study isolated them by changing one variable, pacing gap or polling at a time.
+Queueing, idle-state effects such as cache coldness are distinct mechanisms. This case study isolated them by changing one variable, pacing gap or polling, at a time.
 
 #### Side effect
 The throughput will be injected artificial latencies between messages and won't be useful.
