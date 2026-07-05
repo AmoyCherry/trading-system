@@ -6,6 +6,7 @@ import json
 from dataclasses import fields
 from pathlib import Path
 from scipy.stats import bootstrap
+import re
 
 from scripts.stat.models import RepeatIntervals, RepeatIntervalMetrics, PerfCell, LatencyCell, CounterMetrics, Stats
 
@@ -162,13 +163,31 @@ def load_counter_metrics(scenario, mode, repeat) -> CounterMetrics:
     def safe_div(num: float, den: float) -> float:
         return float(num) / float(den) if den else 0.0
 
+
+    # rusage
+    def parse_ru(log_path: str, key:str) -> int:
+        pattern = re.compile(rf"\b{re.escape(key)}=(\d+)")
+        with open(log_path, 'r') as f:
+            for line in f:
+                match = pattern.search(line)
+                if match:
+                    return int(match.group(1))
+        raise ValueError(f"No {key} found in {log_path}")
+
+    lob_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "lobd.log")
+    gw_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "gateway.log")
+
     # No default val to destroy results, fail loud!
     return CounterMetrics(
         ipc=safe_div(raw_data['instructions'], raw_data['cycles']),
         cycle_per_msg=safe_div(raw_data['cycles'], msgs),
         cache_miss_rate=safe_div(raw_data['cache_misses'], raw_data['cache_references']),
         branch_miss_rate=safe_div(raw_data['branch_misses'], raw_data['branches']),
-        throughput=float(throughput)
+        throughput=float(throughput),
+        gw_vol_ctx_sw=parse_ru(gw_latency_path, "vol_ctx_sw"),
+        gw_invol_ctx_sw=parse_ru(gw_latency_path, "invol_ctx_sw"),
+        lob_vol_ctx_sw=parse_ru(lob_latency_path, "vol_ctx_sw"),
+        lob_invol_ctx_sw=parse_ru(lob_latency_path, "invol_ctx_sw"),
     )
 
 def stat_perf_repeats(counters_repeats: list[CounterMetrics]) -> PerfCell:

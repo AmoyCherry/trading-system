@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class CounterMetrics:
+    # lob only
     ipc: float
     cycle_per_msg: float
     cache_miss_rate: float
@@ -22,6 +23,12 @@ class CounterMetrics:
 
     # Source: exchange's send_throughput_msgs_per_s RESULT line
     throughput: float | int
+
+    # rusage
+    gw_vol_ctx_sw: int
+    gw_invol_ctx_sw: int
+    lob_vol_ctx_sw: int
+    lob_invol_ctx_sw: int
 
 @dataclass
 class RepeatIntervals:
@@ -120,6 +127,11 @@ class PerfCell:
     branch_miss_rate_stat: Stats
 
     throughput_stat: Stats
+
+    gw_vol_ctx_sw_stat: Stats
+    gw_invol_ctx_sw_stat: Stats
+    lob_vol_ctx_sw_stat: Stats
+    lob_invol_ctx_sw_stat: Stats
 
 @dataclass
 class Stats:
