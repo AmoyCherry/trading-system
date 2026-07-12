@@ -9,6 +9,7 @@
 #include "protocol/wire.hpp"
 #include "stats/sample_buffer.hpp"
 #include "util/affinity.hpp"
+#include "util/rusage.hpp"
 
 namespace {
 
@@ -65,6 +66,7 @@ int main(int argc, char** argv) {
     std::uint64_t seq = 1;
     const auto t0 = ts::time::now_ns();
 
+    const auto ru_begin = read_rusage_self();
     for (const auto& msg : stream) {
         ts::wire::Frame frame{};
         const bool ok = std::visit([&](auto&& inner) {
@@ -90,6 +92,8 @@ int main(int argc, char** argv) {
         }
         ++seq;
     }
+    const auto ru_end = read_rusage_self();
+    const auto ru_ex_hot_loop = diff_rusage(ru_begin, ru_end);
 
     {
         // EOF not counted in csv
@@ -116,6 +120,8 @@ int main(int argc, char** argv) {
             << " total_msgs=" << total_msgs
             << " send_elapsed_ns=" << (t1 - t0)
             << " send_throughput_msgs_per_s=" << throughput
+            << " vol_ctx_sw=" << ru_ex_hot_loop.voluntary_ctx_sw
+            << " invol_ctx_sw=" << ru_ex_hot_loop.involuntary_ctx_sw
             << "\n";
     return 0;
 }
