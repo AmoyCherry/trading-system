@@ -80,8 +80,9 @@ int main(int argc, char** argv) {
         ts::wire::Frame frame{};
         ts::transport::Peer from{};
         std::uint64_t t_recv = 0;
-        auto n = sock.recv_into(frame.writable(), from);
+        ssize_t n = 0;
         while (true) {
+            n = sock.recv_into(frame.writable(), from);
             if (n > 0) {
                 break;
             }
@@ -89,8 +90,10 @@ int main(int argc, char** argv) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                     continue;
                 }
+                // fatal socket errors
+                throw std::runtime_error(std::format("Socket receive error, errno: {}", errno));
             }
-            n = sock.recv_into(frame.writable(), from);
+
         }
         const bool hit = ts::stats::should_sample(cnt++, stride);
         if (hit) {
