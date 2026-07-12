@@ -25,6 +25,8 @@ class CounterMetrics:
     throughput: float | int
 
     # rusage
+    ex_vol_ctx_sw: int
+    ex_invol_ctx_sw: int
     gw_vol_ctx_sw: int
     gw_invol_ctx_sw: int
     lob_vol_ctx_sw: int
@@ -128,6 +130,8 @@ class PerfCell:
 
     throughput_stat: Stats
 
+    ex_vol_ctx_sw_stat: Stats
+    ex_invol_ctx_sw_stat: Stats
     gw_vol_ctx_sw_stat: Stats
     gw_invol_ctx_sw_stat: Stats
     lob_vol_ctx_sw_stat: Stats

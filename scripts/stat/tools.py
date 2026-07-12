@@ -174,6 +174,7 @@ def load_counter_metrics(scenario, mode, repeat) -> CounterMetrics:
                     return int(match.group(1))
         raise ValueError(f"No {key} found in {log_path}")
 
+    ex_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "exchange.out")
     lob_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "lobd.log")
     gw_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "gateway.log")
 
@@ -184,6 +185,8 @@ def load_counter_metrics(scenario, mode, repeat) -> CounterMetrics:
         cache_miss_rate=safe_div(raw_data['cache_misses'], raw_data['cache_references']),
         branch_miss_rate=safe_div(raw_data['branch_misses'], raw_data['branches']),
         throughput=float(throughput),
+        ex_vol_ctx_sw=parse_ru(ex_latency_path, "vol_ctx_sw"),
+        ex_invol_ctx_sw=parse_ru(ex_latency_path, "invol_ctx_sw"),
         gw_vol_ctx_sw=parse_ru(gw_latency_path, "vol_ctx_sw"),
         gw_invol_ctx_sw=parse_ru(gw_latency_path, "invol_ctx_sw"),
         lob_vol_ctx_sw=parse_ru(lob_latency_path, "vol_ctx_sw"),
