@@ -65,15 +65,14 @@ UdsDgramSocket& UdsDgramSocket::operator=(UdsDgramSocket&& o) noexcept {
   return *this;
 }
 
-std::size_t UdsDgramSocket::recv_into(std::span<std::byte> buf, Peer& from) {
+ssize_t UdsDgramSocket::recv_into(std::span<std::byte> buf, Peer& from) {
   from.len = sizeof(from.addr);
-  const auto n = ::recvfrom(fd_,
-                           buf.data(),
-                           buf.size(),
-                           MSG_DONTWAIT,
-                           reinterpret_cast<sockaddr*>(&from.addr),
-                           &from.len);
-  return static_cast<std::size_t>(n);
+  return ::recvfrom(fd_,
+                buf.data(),
+                  buf.size(),
+                  MSG_DONTWAIT,
+                    reinterpret_cast<sockaddr*>(&from.addr),
+                    &from.len);
 }
 
 std::size_t UdsDgramSocket::send_to(std::span<const std::byte> data, const Peer& to) {
