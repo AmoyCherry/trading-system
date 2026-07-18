@@ -49,3 +49,4 @@ agent-shared-context/
 /.idea/modules.xml
 /build/
 /.claude/worktrees/vigilant-antonelli-387e32/
+/.personal/
