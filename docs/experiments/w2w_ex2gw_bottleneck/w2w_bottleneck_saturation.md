@@ -11,7 +11,7 @@
 > - median±MAD, MDE gate
 
 ## Observe - What's wrong?
-I build two measurement tools - stage timestamps and perf counter attribution. And I built a w2w decomposition table to find the bottleneck in the w2w.
+I built two measurement tools - stage timestamps and perf counter attribution. And I built a w2w decomposition table to find the bottleneck in the w2w.
 
 In the [M7-baseline](./blocking//M7-baseline) run, The `ex2gw` is the **largest interval** and **dominates over 96% (614 us)** latency portion in the entire trip in all three scenarios. While another UDS trans `gw2lob` is normal, and the matching engine (lob_apply) stage is about invisible (0.23 us).
 ### cross
@@ -39,7 +39,7 @@ By controlling the msg sending speed of `ex` from fast to slow, like from `1us` 
 The level is where the queue size keeps <= 1, so msgs arrive without any older datagram outstanding in the socket buffer.
 
 ### Why it's asymmetric - `gw2lob` is also a UDS transportation on the same machine?
-`gw` consumes msgs from the upstream and feed them to lob. The feed speed depends on how fast the `gw` can recv, and it should slower than or equal to the lob can recv.
+`gw` consumes msgs from the upstream and feeds them to lob. The feed speed depends on how fast the `gw` can recv, and it should be slower than or equal to the lob can recv.
 
 ## Experiment
 ### Strategy - Pacing
@@ -74,7 +74,7 @@ For the within-run metric, I pick up the `p50` to analyze. Because the question 
 ### Conclusion
 **Matches hypothesis**
 
-The typical time of `ex2gw` dropped from the baseline `~633us` to the lowest `~3.1 us` and stayed above there, where the queue was removed.
+The typical time of `ex2gw` dropped from the baseline `~633us` to the floor `~3.1 us` and stayed above there, where the queue-free fast population dominates the p50.
 
 The p-50 defined knee is around `5-6us`, where the empty-queue becomes dominant enough for p50, and the median of `ex2gw` `p50` latency drops to its floor `3.1 us`.
 
@@ -120,15 +120,15 @@ At `T = 12us`, the `median±MAD`:
 | polling `recvfrom`  |         836.0 ± 28.5   | 54.0 ± 3.0 | 0.0 ± 0.0 | 298.5 ± 24.0 |
 
 - Blocking `recvfrom`'s `voluntary ctx sw` vs polling is  1.84M vs 800 for 2 million msgs. That's approximately 0.92 vol sw per msg, consistent with the `gw` sleeping between most receives. And polling removes the wake-up overhead for most of the msgs. 
-- The `involuntary ctx sw` is smaller than 4 hundreds in both IO modes, that's far smaller than 1% of messages. That means `involuntary ctx sw` operations including OS preemption is very rare and can only influence the tails such as `p99/max`, and can not move `p50`.
+- The `involuntary ctx sw` is smaller than 4 hundreds in both IO modes, that's far smaller than 1% of messages. That means `involuntary ctx sw` operations including OS preemption is too rare and to drag the `p50`; their direct effect should be in the tails such as `p99/max`.
 
 ### Blocking vs Polling Difference
 
 > [qas.md](./qas.md)
 
-1. baseline: `lob`'s blocking `recvfrom` adds wake-up overhead to `gw sendto` - add waiting time in `ex2gw`;
-2. floor-touch region: smalls queues keep forming when crossing the saturation bound, so arriving alone rate are much slower vs polling around the bound. (`90.6%` vs `50.1%` at `T=4`)
-3. floor: blocking `recvfrom` introduce wake-up overhead on both sides.
+1. baseline: Polling lob removes downstream receiver wake-up work from the upstream `gw:sendto`, shortening the `gw` drain cycle. 
+2. floor-touch region: small queues keep forming when crossing the saturation bound, so arriving alone rate is much smaller vs polling around the bound. (`90.6%` vs `50.1%` at `T=4`)
+3. floor: blocking `recvfrom` introduces wake-up and hot-core recovery effects.
 
 ## Pacing side effect
 
