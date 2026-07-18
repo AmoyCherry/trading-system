@@ -1,7 +1,5 @@
 ## Q1 - Why the baseline drops 633.7 → 541.1 when switching to non-blocking `recvfrom`?
 
-### Short Answer
-
 1. At baseline, the `ex2gw` interval latency consists of `waiting time in the queue` + `mem copy`.
 2. A msg's waiting time is the sum of previous msgs' draining time.
 3. The head msg's draining time is actually an iteration of gw's loop: `mem copy + gw decode + gw send`. The 2nd msg becomes new head once the head drained, so a msg's waiting time is `(n - 1) * gw_iteration`.
@@ -12,12 +10,13 @@
 > sendto() → wake_up_interruptible()
 
 
-### Reconstruction
-
+### Baseline Reconstruction
 
 A. The queue size changed only slightly.
 
-In `exts.csv` and `gwts.csv`, by binary searching every `ex_after_send[i]` in `gw_recv[]`, `queue_size[i] = i − #{j : gw_recv[j] ≤ ex_after_send[i]}`. The median `q50_outstanding` is 162 vs 158 for blocking and polling.
+Compute every msg's queue size after arriving the queue: in `exts.csv` and `gwts.csv`, by binary searching every `ex_after_send[i]` in `gw_recv[]`, `queue_size[i] = i − #{j : gw_recv[j] ≤ ex_after_send[i]}`. 
+
+Get the median `q50_outstanding` is blocking `162` vs polling `158` .
 
 B. Reconstruct the `ex2gw` p50 latency.
 
@@ -25,6 +24,9 @@ B. Reconstruct the `ex2gw` p50 latency.
 
 - `162` × `3.969` = `643` vs `633.7us` measured
 - `158` × `3.437` = `543` vs `541.1us` measured
+
+This is not a per-message identity; it is a steady-state reconstruction that validates the queueing model and reproduces both the absolute scale.
+
 
 ## Q2 - Why does the floor-touch region move from `5-6us` to `4us` when switching to polling `recvfrom`?
 
@@ -37,8 +39,8 @@ B. Reconstruct the `ex2gw` p50 latency.
 1. The saturation bound does not move: 
    - both blocking and polling collapsed from a large queue `159` vs `158.5` at `3us` to `1.5` vs `1` at `4us`; and `1` vs `1` at `5us`, for the p50 msgs.
 2. What moves is the T where the fast population becomes dominant enough for `ex2gw` to report the floor:
-   - Polling reaches the `p50` floor `1.1us` immediately at `T=4us` because **`90.6% of` msgs arriving alone** without any older datagram outstanding; `55.4%` msgs in the arriving alone population are below that floor. And the overall `ex2gw` p50 is appx. `0.5/0.906=55.2th` percent of the fast population, so the overall p50 latency is a typical queue-free latency.
-   - At blocking `T=4us`, the median of the `ex2gw` p50 `3.99us`, and only `50.1%` of msgs arriving alone. `91.2%` msgs in the arriving alone population, and `8.8%` in the queued population are below that `3.99us`. The overall `ex2gw` p50 is appx. `0.5/0.501=99.8th` msg of the fast population which is in the overlapping area - some arriving alone msgs have longer latency than few queued msgs, so the reported `3.99us` is not a typical fast path latency.
+   - Polling reaches the `p50` floor `1.1us` immediately at `T=4us`. Because `90.6%` of messages arriving alone without any older datagram outstanding, `55.4%` msgs in the arriving alone population are below that floor. And the overall p50 is approximately `50/90.6 = p55.2` of the fast population—a typical fast-path latency.
+   - At blocking `T=4us`, the median of the `ex2gw` p50 is `3.99us`, and only `50.1%` of msgs arriving alone. `91.2%` msgs in the arriving alone population, and `8.8%` in the queued population are below that `3.99us`. The overall `ex2gw` p50 is appx. `0.5/0.501=99.8th` msg of the fast population, which is in the overlapping area between the two populations, so the reported `3.99us` is not a typical fast path latency.
 
 Mechanism:
 
