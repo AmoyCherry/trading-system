@@ -29,7 +29,7 @@ In the [M7-baseline](./blocking//M7-baseline) run, The `ex2gw` is the **largest 
 
 ## Diagnosis
 - `gw` needs to process a decode and a `sendto` syscall between two recv calls; while `ex` can send a msg immediately after the  previous msg. The consumer is much slower than the producer, so the queue size of the socket buffer can be gradually increased.
-- The `ex2gw` measures the interval from "the upstream producer finished sending" to "the downstream consumer's `recvfrom` returned the msg". So this interval consists of `"waiting in the socker buffer" + "recveiver wake-up" + "mem copy k2us" `.
+- The `ex2gw` measures the interval from "the upstream producer finished sending" to "the downstream consumer's `recvfrom` returned the msg". So this interval consists of `"waiting in the socket buffer" + "receiver wake-up" + "mem copy k2us" `.
 - Finally, the interval latency is actually measuring the waiting time.
 
 ## Hypothesis
