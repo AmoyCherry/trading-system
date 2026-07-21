@@ -28,7 +28,7 @@ Three scenarios msgs can be generated: add_only, cross, cancel_heavy. They trigg
 - latency experiments: `[add, cross, cancel]` × `[match]`.  To stat latencies for every interval. All timestamps will be collected for every msg.
 - perf experiment: `[add, cross, cancel]` × `[null, decode, match]` To attribute perf counters to matching engine. All timestamps will be disabled to remove clock noise. Under every scenario, three perf modes need to run: Null engine, Decode, Match.
 
-![lob-perf](./assets/lob-perf.png)
+![lob-perf](./assets/lob-perf.jpg)
 
 ## Technique Detail for Measurement Validity
 
@@ -37,8 +37,8 @@ Reproducibility is guaranteed by
   - Msg hash. Rolling hash for every bit of every msg generated in `ex`. Compare latency/perf difference between experiments should assert their msg hashes are identical in advance.
   - Book state hash. Different experiments should have bit-exact states (identical state hashes) in `lobd`. 
 - controlled variables
-  - CPU pinning. All three processes are pinned to p-core (by `taskset -c` or in binary `sched_setaffinity`).
-  - CPU governor. Set scaling_governor to performance + disable turbo-off. Thus, to limit CPU frequency into a narrowband.
+  - CPU pinning. All three processes are pinned to different p-core (by `taskset -c` or in binary `sched_setaffinity`).
+  - CPU governor. Set `scaling_governor` to `performance` + enable `turbo-off`. Thus, to limit CPU frequency into a narrowband.
   - `isolcpu`. Still disabled. But now I have a solid evidence (negative intervals) claims I indeed need them. 
   - pre-faulting.
 
@@ -51,6 +51,7 @@ People buy and sell these items from each other via the exchange. All bid orders
 
 - The Best Bid is the highest price that buyers are willing to buy.
 - The Best Ask is the lowest price that sellers are willing to sell.
+
 When `Best Bid >= Best Ask`, the orders can be matched.
 
 The exchange receives those orders from both sides in the same queue sequentially. It processes one order at a time. If `Best Bid >= Best Ask`, it will match the orders exhaustedly. All unmatched orders remain in the exchange to be maintained, called as Limit Order Book. For each item in the LOB, there is  `Best Bid < Best Ask`.
