@@ -18,7 +18,7 @@ This project contains three single-threaded processes: _exchange_sim_, _gateway_
 - single-variable, hypothesis-first experiments;
 - statistical validity:
   - p50/p99 latency;
-  - center±spread (med±robust CV) report;
+  - center±spread (med±MAD) report;
   - gated by `MDE=k·MAD`;
 - credible baseline:
   - [w2w bottleneck](./docs/experiments/w2w_ex2gw_bottleneck/w2w_bottleneck_saturation.md)
