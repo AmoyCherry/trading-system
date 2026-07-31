@@ -21,8 +21,8 @@ This project contains three single-threaded processes: _exchange_sim_, _gateway_
   - center±spread (med±MAD) report;
   - gated by `MDE=k·MAD`;
 - credible baseline:
-  - [w2w bottleneck](./docs/experiments/w2w_ex2gw_bottleneck/w2w_bottleneck_saturation.md)
-  - [os preemption](./docs/experiments/os-preemption/negative_latencies.md)
+  - [w2w bottleneck](case_study/w2w_ex2gw_bottleneck/w2w_bottleneck_saturation.md)
+  - [os preemption](case_study/os-preemption/negative_latencies.md)
 
 ### Workflow
 
@@ -54,7 +54,7 @@ Reproducibility is supported by:
 - controlled variables:
   - CPU pinning. All three processes are pinned to different P-cores (using `taskset -c` or `sched_setaffinity` in the binary).
   - CPU governor. Set `scaling_governor` to `performance` and enable `turbo-off` to limit CPU frequency to a narrow band.
-  - `isolcpus`. It is still disabled, but solid evidence from [negative intervals](./docs/experiments/os-preemption/negative_latencies.md) shows that it is needed.
+  - `isolcpus`. It is still disabled, but solid evidence from [negative intervals](.case_study/os-preemption/negative_latencies.md) shows that it is needed.
   - pre-faulting.
 
 Negative controls: latency statistics for unmodified intervals should remain unchanged compared with the baseline.
