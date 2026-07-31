@@ -54,7 +54,7 @@ Reproducibility is supported by:
 - controlled variables:
   - CPU pinning. All three processes are pinned to different P-cores (using `taskset -c` or `sched_setaffinity` in the binary).
   - CPU governor. Set `scaling_governor` to `performance` and enable `turbo-off` to limit CPU frequency to a narrow band.
-  - `isolcpus`. It is still disabled, but solid evidence from [negative intervals](.case_study/os-preemption/negative_latencies.md) shows that it is needed.
+  - `isolcpus`. It is still disabled, but solid evidence from [negative intervals](case_study/os-preemption/negative_latencies.md) shows that it is needed.
   - pre-faulting.
 
 Negative controls: latency statistics for unmodified intervals should remain unchanged compared with the baseline.
