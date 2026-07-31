@@ -1,2 +1,0 @@
-/home/w278wang/git/trading-system/artifacts/results/latency_20260712_201221_1796356
-/home/w278wang/git/trading-system/artifacts/results/perf_20260704_161336_776681
