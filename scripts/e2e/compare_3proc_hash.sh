@@ -110,13 +110,13 @@ LOB_MODE="${LOB_MODE:-match}"     # only `match` mode produces state hash
 # to a per-process log inside RUN_DIR.
 
 # 1. lobd  --- binds first; gateway needs its socket to exist before dialing.
-"${LOB_BIN}" --local "${LOB}" --mode "${LOB_MODE}" \
+"${LOB_BIN}" --local "${LOB}" --mode "${LOB_MODE}" --msgs "${N}" --stride 0 --dump "${RUN_DIR}" \
   > "${RUN_DIR}/lobd.log" 2>&1 &
 LOB_PID=$!
 wait_for_ready "${RUN_DIR}/lobd.log" "lobd"
 
 # 2. gateway  --- binds, dials lobd.
-"${GW_BIN}" --local "${GW}" --to-lob "${LOB}" \
+"${GW_BIN}" --local "${GW}" --to-lob "${LOB}" --msgs "${N}" --stride 0 --dump "${RUN_DIR}" \
   > "${RUN_DIR}/gateway.log" 2>&1 &
 GW_PID=$!
 wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
@@ -127,7 +127,7 @@ wait_for_ready "${RUN_DIR}/gateway.log" "gateway"
 set +e
 timeout --foreground --signal=TERM "${EXCH_TIMEOUT}" \
   "${EX_BIN}" --local "${EXCH}" --to-gateway "${GW}" \
-    --scenario "${SCENARIO}" --n "${N}" \
+    --scenario "${SCENARIO}" --n "${N}" --stride 0 --dump "${RUN_DIR}" \
     | tee "${RUN_DIR}/exchange.out"
 # `$?` would be `tee`'s exit code; we want exchange_sim's, which is in
 # the first slot of PIPESTATUS (an array of every pipe stage's exit code).
@@ -197,5 +197,8 @@ if [[ "$hash1" == "$hash2" ]]; then
     echo "✅ Success: The state hashes match."
 else
     echo "❌ Mismatch: The state hashes are different."
+    # AGENTS.md calls this a hard gate, so it has to fail the exit code too --
+    # printing alone let callers read a mismatch as success.
+    exit 1
 fi
 

@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
             << " scenario=" << ts::gen::to_string(kind)
             << " scenario_units=" << n
             << " total_msgs=" << total_msgs
+            << " pacing_T_ns=" << ts::time::T
             << " send_elapsed_ns=" << (t1 - t0)
             << " send_throughput_msgs_per_s=" << throughput
             << " vol_ctx_sw=" << ru_ex_hot_loop.voluntary_ctx_sw

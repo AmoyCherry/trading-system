@@ -8,6 +8,7 @@ class Engine {
 public:
     void on_new(const proto::NewOrder& msg, const EventSink& out) { book_.on_new(msg, out); }
     void on_cancel(const proto::Cancel& msg, const EventSink& out) { book_.on_cancel(msg, out); }
+    void reserve_orders(std::size_t limit) { book_.reserve_orders(limit); }
 
     // queries (used by tests; also useful later for sanity checks)
     std::size_t live_order_count() const { return book_.live_order_count(); }
@@ -19,7 +20,7 @@ public:
     BookSummary summary() const { return book_.summary(); }
 
 private:
-    OrderBook book_;
+    OrderBook book_{};
 };
 
 } // namespace ts::engine

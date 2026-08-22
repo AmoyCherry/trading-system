@@ -2,9 +2,12 @@
 
 1. At baseline, the `ex2gw` interval latency consists of `waiting time in the queue` + `mem copy`.
 2. A msg's waiting time is the sum of previous msgs' draining time.
-3. The head msg's draining time is actually an iteration of gw's loop: `mem copy + gw decode + gw send`. The 2nd msg becomes new head once the head drained, so a msg's waiting time is `(queue_size - 1) * gw_iteration`.
+3. The head msg's draining time is actually a msg iteration of gw: `mem copy + gw decode + blocking sendto`. The 2nd msg becomes new head once the head drained, so a msg's waiting time is `(queue_size - 1) * gw_iteration`.
+
+So `ex2gw` can be influenced by two factors: queue size and gw_iteration. 
+
 4. Blocking `recvfrom` of `lob` has 770,969 vol sw, added wake-up callback overhead to `gw`'s `sendto`. While polling `recvfrom` only has 0 vol sw so removes wake-up callback from `gw`'s `sendto`. As a result, 
-   - The median of `gw_intvl_send_p50_stat` drops 2,173.5 → 1,889.5 ns, ~13.1%; `gw_intvl_send_mean_stat` drops 2,510.5 → 1,979.5 ns, ~21.2%. Then the median of `ex2gw` drops 633.7 → 541.1 us, ~14.6%.
+   - The median of `gw sendto p50` drops from 2,173.5 → 1,889.5 ns, ~13.1%; and the median of `ex2gw` drops 633.7 → 541.1 us, ~14.6%.
    - `gw_intvl_decode_p50_stat` is nearly unchanged at 70.0 → 69.5 ns; `gw` almost never sleeps at saturation in either mode, with 691 vs 253 voluntary switches.
 
 With `queue_size` and `gw:decode` keep unchanged, the changing scale of `gw:sendto` supports the wake-up work is the dominant explanation for the faster drain cycle.

@@ -124,6 +124,7 @@ int lobd_main(int argc, char** argv) {
   ts::transport::UdsDgramSocket sock(local);
 
   ts::engine::Engine eng;
+  eng.reserve_orders(total_msgs);
   ReplayCounters ctr;
 
   ts::engine::EventSink out = [&](const ts::engine::Event& ev) {

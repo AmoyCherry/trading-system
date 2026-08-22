@@ -33,6 +33,8 @@ public:
 
     BookSummary summary() const;
 
+    void reserve_orders(std::size_t limit);
+
     // observer
     struct LevelStates {
         proto::Price price{};

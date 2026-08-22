@@ -13,7 +13,7 @@
 ## Observe - What's wrong?
 I built two measurement tools - stage timestamps and perf counter attribution. And I built a w2w decomposition table to find the bottleneck in the w2w.
 
-In the [M7-baseline](./blocking//M7-baseline) run, The `ex2gw` is the **largest interval** and **dominates over 96% (614 us)** latency portion in the entire trip in all three scenarios. While another UDS trans `gw2lob` is normal, and the matching engine (lob_apply) stage is about invisible (0.23 us).
+In the [M7-baseline](./blocking//M7-baseline) run, The `ex2gw` is the **largest interval** and **dominates over 96% (614 us)** latency in the entire w2w transport in all three scenarios, while `gw2lob` is normal and the matching engine (`lob_apply`) is nearly invisible at 0.23 us. Both this value and ratio make no sense.
 ### cross
 | metric                     |   median (ns) |   mad (ns) |   robust cv | %w2w    |
 |:---------------------------|--------------:|-----------:|------------:|:--------|
@@ -26,11 +26,13 @@ In the [M7-baseline](./blocking//M7-baseline) run, The `ex2gw` is the **largest 
 | gw2lob_trans_mean_stat     |    14724.3    |   2406.8   |       0.252 | 2.32%   |
 | w2w_mean_stat              |   635926      |  11596.8   |       0.028 | 100.00% |
 
+> Why this decomposition table uses `mean` to telescope?
+> - For mathematical correctness. `mean` is addable (linear), while percentiles are not, `inteval_i_p50` and `interval_j_p50` and `w2w_p50` are not coming from the same msg. So `sum(interval_i_p50) = w2w_p50`, but `sum(interval_i_mean) = w2w_mean`.   
 
 ## Diagnosis
-- `gw` needs to process a decode and a `sendto` syscall between two recv calls; while `ex` can send a msg immediately after the  previous msg. The consumer is much slower than the producer, so the queue size of the socket buffer can be gradually increased.
+- `gw` needs to run two syscalls per msg, a `recvfrom` and a `sendto`; while `ex` just needs to run a `sendto` per msg. So the consumer is much slower than the producer, and the msgs could accumulate in the socket buffer to be consumed.
 - The `ex2gw` measures the interval from "the upstream producer finished sending" to "the downstream consumer's `recvfrom` returned the msg". So this interval consists of `"waiting in the socket buffer" + "receiver wake-up" + "mem copy k2us" `.
-- Finally, the interval latency is actually measuring the waiting time.
+- The consumer should be busy on the core for most of the time, the `ex2gw` interval likely measures the waiting time.
 
 ## Hypothesis
 
@@ -132,6 +134,45 @@ At `T = 12us`, the `median±MAD`:
 
 ## Pacing side effect
 
-To measure the throughput to answer "how fast the `ex` can send", we should remove the pacing.
+To measure the throughput to answer "how fast the `ex` can send", I should remove the pacing.
 
-With pacing, the throughput can only use to check if the pacing worked. Because we can calculate the throughput before running, such as `83K msgs/sec = 1 sec / 12 us` when pacing gap is `12us`.
+With pacing, the throughput can only use to check if the pacing worked. Because we can calculate the throughput before running, such as `83K msgs/sec = 1sec / 12us/msg` when pacing gap is `12us`.
+
+## Tail Effect
+
+Pacing removed the queuing, and polling `recvfrom` removed the wake-up overhead. But the `~29ms` long tail in `p99` and `max` remain unexplained.
+
+> [source](./tail-effect/before-20260712_201952/latency_summary.csv)
+>
+> Both snapshots under `./tail-effect/` also carry `perf_summary.csv` and `view.md`. **Only the latency columns are valid.** Both summaries join against the same July 4 perf run (`perf_20260704_161336`, see `source.txt`), so their throughput and cyc/msg figures describe an older binary and are not cited here.
+
+- ex_send_max 28.0±0.16ms
+- gw_send_max 28.7±0.16ms
+- lob_apply_max 29.7±0.16ms
+
+### Analysis
+
+**Findings:**
+- The numbers of these three tails are unusually close, likely dependent on each other.
+- `lob apply` is an in-process procedure without explicit syscalls and should not produce a 29ms tail compare to `lob_apply_p50`'s `138.0±0.5 ns`. But it can invoke unordered_map insertion when inserting resting orders, which may invoke heap allocation, and relinking one million scattered nodes in mem.
+
+**Analysis:**
+- It's not like OS preemption:
+  - The `~29ms` stall reported in every run, the mechanism, and the cost of this mechanism are deterministic in my code.
+  - The stalls form a halving series: 29.9, 14.6, 6.6, 3.4, 1.8, 0.9, 0.5 ms by sorting the 2M msgs by `lob_apply`. Like a capacity growth and heap allocation. 
+
+ex_send and gw_send are backpressure from heap allocation in lob_apply:
+  - why it's exact these two sendto has long tails: they are blocking sendto. When the socket buffer is full (with 2M msgs this is reachable), gw_send needs to wait the head to be drained to yield a seat, but lob may stall in heap allocation and mem copy. ex_send can also be stalled in the same way by gw.
+  - We can find it's the No. 1,508,000 msg produced the lob_apply_max tail, `gw_send_max` at No. 1,508,279m, `ex_send_max` at No. 1,508,558.
+
+### live_.reserve()
+Reserving heap mem for `std::unordered_map<OrderID, Order> live_` in advance removed hot-path mem allocation and relinking scattered nodes.
+
+> [source](./tail-effect/after-20260819_184404/latency_summary.csv)
+
+- ex_send_max 2.7±1.2ms
+- gw_send_max 0.37±0.05ms
+- lob_apply_max 0.29±0.03ms
+
+
+
