@@ -286,10 +286,21 @@ echo
 echo "RUN_DIR=${RUN_DIR}"
 
 # --- provenance ------------------------------------------------------------------
+# Pacing gap T is a compile-time constant (src/common/time/clock.hpp), so read it back
+# from the binary's own RESULT line rather than from the source file -- the source may
+# have moved on since the build. Fail loud: an unrecorded T has already cost one
+# ambiguous cross-run comparison.
+PACING_T_NS=$(sed -n 's/.*pacing_T_ns=\([0-9][0-9]*\).*/\1/p' "${RUN_DIR}/exchange.out")
+if [[ -z "${PACING_T_NS}" ]]; then
+  echo "FATAL: pacing_T_ns missing from ${RUN_DIR}/exchange.out (stale exchange_sim binary?)" >&2
+  exit 1
+fi
+
 cat > "${RUN_DIR}/config.json" <<EOF
 {
   "scenario":"${SCENARIO}","mode":"${LOB_MODE}","n":${N},"stride":${STRIDE},
   "repeat":${REPEAT},"perf":${PERF_MODE},"ts":"${TS}",
+  "pacing_T_ns":${PACING_T_NS},
   "cores":{"lob":${LOB_CORE},"gw":${GW_CORE},"ex":${EX_CORE}},
   "affinity":"$([[ $USE_IN_BINARY_AFFINITY -eq 1 ]] && echo in-binary || echo taskset)",
   "git_commit":"$(git rev-parse --short HEAD)",

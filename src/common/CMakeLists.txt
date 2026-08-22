@@ -1,5 +1,6 @@
 # Define a library target
-add_library(ts_common)
+add_library(ts_common
+        util/rusage.hpp)
 # Add source files to the library
 target_sources(ts_common PRIVATE
         # Listing hpp files just cosmetic

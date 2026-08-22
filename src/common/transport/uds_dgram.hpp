@@ -32,7 +32,7 @@ namespace ts::transport {
     static Peer peer_from_path(const std::string& path);
 
     // recvfrom: returns bytes read + peer address
-    std::size_t recv_into(std::span<std::byte> buf, Peer& from);
+    ssize_t recv_into(std::span<std::byte> buf, Peer& from);
 
     // sendto
     std::size_t send_to(std::span<const std::byte> data, const Peer& to);

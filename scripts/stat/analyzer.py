@@ -64,8 +64,8 @@ headline = {
     'throughput(M/s)': [0] * len(SCENARIOS),
     'p99_w2w(ms)': [0] * len(SCENARIOS),
     'p99_lob_apply(ns)': [0] * len(SCENARIOS),
-    'lob_engine cyc/msg': [0] * len(SCENARIOS),
-    'lob_codec cyc/msg': [0] * len(SCENARIOS),
+    'lob_engine cyc/msg, 95% CI': [0] * len(SCENARIOS),
+    'lob_codec cyc/msg, 95% CI': [0] * len(SCENARIOS),
     'floor cyc/msg': [0] * len(SCENARIOS)
 }
 

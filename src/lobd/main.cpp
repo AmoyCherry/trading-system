@@ -12,6 +12,7 @@
 #include "stats/sample_buffer.hpp"
 #include "time/clock.hpp"
 #include "util/affinity.hpp"
+#include "util/rusage.hpp"
 
 namespace {
 
@@ -66,11 +67,13 @@ enum class Mode {
 
 // template propagation
 template <Mode M>
-void print_result(const ReplayCounters& ctr, const ts::engine::BookSummary& s) {
+void print_result(const ReplayCounters& ctr, const ts::engine::BookSummary& s, const RusageCounters& ru) {
   std::cout << "STATS role=lobd"
            << " applied_msgs=" << ctr.applied_msgs
            << " decode_errors=" << ctr.decode_errors
            << " seq_errors=" << ctr.seq_errors
+           << " vol_ctx_sw=" << ru.voluntary_ctx_sw
+           << " invol_ctx_sw=" << ru.involuntary_ctx_sw
            << "\n";
 
   std::cout << "RESULT"
@@ -121,6 +124,7 @@ int lobd_main(int argc, char** argv) {
   ts::transport::UdsDgramSocket sock(local);
 
   ts::engine::Engine eng;
+  eng.reserve_orders(total_msgs);
   ReplayCounters ctr;
 
   ts::engine::EventSink out = [&](const ts::engine::Event& ev) {
@@ -129,11 +133,26 @@ int lobd_main(int argc, char** argv) {
 
   std::cout << "READY lobd local=" << local << "\n" << std::flush;
 
+  const auto ru_begin = read_rusage_self();
   while (!g_stop.load()) {
     ts::wire::Frame frame;
     ts::transport::Peer from{};
     std::uint64_t t_recv = 0;
-    const auto n = sock.recv_into(frame.writable(), from);
+    ssize_t n = 0;
+    while (true) {
+      n = sock.recv_into(frame.writable(), from);
+      if (n > 0) {
+        break;
+      }
+      if (n < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+          continue;
+        }
+        // fatal socket errors
+        throw std::runtime_error(std::format("Socket receive error, errno: {}", errno));
+      }
+
+    }
     const bool hit = ts::stats::should_sample(cnt++, stride);
     if (hit) {
       t_recv = ts::time::now_ns();
@@ -182,6 +201,8 @@ int lobd_main(int argc, char** argv) {
       }
     } // if Decode || Match
   } // while g_stop
+  const auto ru_end = read_rusage_self();
+  const auto& ru_lob_hot_loop = diff_rusage(ru_begin, ru_end);
 
   const auto& filename = std::format("{}/{}", dump_dir, "lobts.csv");
   ts::stats::dump(tses, "seq,lob_recv,lob_decode_done,lob_apply_done", filename,
@@ -189,7 +210,7 @@ int lobd_main(int argc, char** argv) {
       return std::format("{},{},{},{}", timestamp.t_seq, timestamp.t_lob_recv, timestamp.t_lob_decode_done, timestamp.t_lob_apply_done);
     });
 
-  print_result<M>(ctr, eng.summary());
+  print_result<M>(ctr, eng.summary(), ru_lob_hot_loop);
   return 0;
 }
 

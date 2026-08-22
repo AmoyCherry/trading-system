@@ -315,4 +315,7 @@ std::vector<OrderBook::LevelStates> OrderBook::level_stats(proto::Side side, std
   return out;
 }
 
+void OrderBook::reserve_orders(std::size_t limit) {
+  live_.reserve(limit);
+}
 } // namespace ts::engine

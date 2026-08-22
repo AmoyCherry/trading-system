@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "util/rusage.hpp"
+
 static std::atomic<bool> g_stop{false};
 static void on_sig(int) { g_stop.store(true); }
 
@@ -73,11 +75,26 @@ int main(int argc, char** argv) {
     std::uint64_t seq_errors = 0;
     std::uint64_t last_seq = 0;
 
+    const auto ru_begin = read_rusage_self();
     while (!g_stop.load()) {
         ts::wire::Frame frame{};
         ts::transport::Peer from{};
         std::uint64_t t_recv = 0;
-        const auto n = sock.recv_into(frame.writable(), from);
+        ssize_t n = 0;
+        while (true) {
+            n = sock.recv_into(frame.writable(), from);
+            if (n > 0) {
+                break;
+            }
+            if (n < 0) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
+                    continue;
+                }
+                // fatal socket errors
+                throw std::runtime_error(std::format("Socket receive error, errno: {}", errno));
+            }
+
+        }
         const bool hit = ts::stats::should_sample(cnt++, stride);
         if (hit) {
             t_recv = ts::time::now_ns();
@@ -112,6 +129,8 @@ int main(int argc, char** argv) {
         }
         ++ forwarded;
     }
+    const auto ru_end = read_rusage_self();
+    const auto ru_gw_hot_loop = diff_rusage(ru_begin, ru_end);
 
     const auto& filename = std::format("{}/{}", dump_dir, "gwts.csv");
     ts::stats::dump(gwtses,"seq,gw_recv,gw_before_send,gw_after_send",filename,
@@ -124,6 +143,8 @@ int main(int argc, char** argv) {
             << " decode_errors=" << decode_errors
             << " seq_errors=" << seq_errors
             << " last_seq=" << last_seq
+            << " vol_ctx_sw=" << ru_gw_hot_loop.voluntary_ctx_sw
+            << " invol_ctx_sw=" << ru_gw_hot_loop.involuntary_ctx_sw
             << "\n";
 
     return 0;

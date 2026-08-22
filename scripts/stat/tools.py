@@ -6,6 +6,7 @@ import json
 from dataclasses import fields
 from pathlib import Path
 from scipy.stats import bootstrap
+import re
 
 from scripts.stat.models import RepeatIntervals, RepeatIntervalMetrics, PerfCell, LatencyCell, CounterMetrics, Stats
 
@@ -162,13 +163,34 @@ def load_counter_metrics(scenario, mode, repeat) -> CounterMetrics:
     def safe_div(num: float, den: float) -> float:
         return float(num) / float(den) if den else 0.0
 
+
+    # rusage
+    def parse_ru(log_path: str, key:str) -> int:
+        pattern = re.compile(rf"\b{re.escape(key)}=(\d+)")
+        with open(log_path, 'r') as f:
+            for line in f:
+                match = pattern.search(line)
+                if match:
+                    return int(match.group(1))
+        raise ValueError(f"No {key} found in {log_path}")
+
+    ex_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "exchange.out")
+    lob_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "lobd.log")
+    gw_latency_path = get_log_path(latest_latency_dir, scenario, "match", repeat, "gateway.log")
+
     # No default val to destroy results, fail loud!
     return CounterMetrics(
         ipc=safe_div(raw_data['instructions'], raw_data['cycles']),
         cycle_per_msg=safe_div(raw_data['cycles'], msgs),
         cache_miss_rate=safe_div(raw_data['cache_misses'], raw_data['cache_references']),
         branch_miss_rate=safe_div(raw_data['branch_misses'], raw_data['branches']),
-        throughput=float(throughput)
+        throughput=float(throughput),
+        ex_vol_ctx_sw=parse_ru(ex_latency_path, "vol_ctx_sw"),
+        ex_invol_ctx_sw=parse_ru(ex_latency_path, "invol_ctx_sw"),
+        gw_vol_ctx_sw=parse_ru(gw_latency_path, "vol_ctx_sw"),
+        gw_invol_ctx_sw=parse_ru(gw_latency_path, "invol_ctx_sw"),
+        lob_vol_ctx_sw=parse_ru(lob_latency_path, "vol_ctx_sw"),
+        lob_invol_ctx_sw=parse_ru(lob_latency_path, "invol_ctx_sw"),
     )
 
 def stat_perf_repeats(counters_repeats: list[CounterMetrics]) -> PerfCell:
@@ -249,17 +271,12 @@ The stats data presented in `center ± spread` is `median ± mad`.
 
 **`engine cyc/msg`**
 
-Cross-mode delta is guarded by **bootstrapping**.
+Cross-mode delta is calculated by `med(match) - med(decode)` and is guarded by **CI**. The CI is calculated by  **bootstrapping**.
 
-Match/decode/null produce three experimental sets under each scenario. They're used to attribute perf counters to engine by calculating the deltas between two sets per counter. And we must go with **CI** to calculate the uncertainty when dealing with deltas.
+To calculate the deltas between two exprtl sets per counter, we must go with CI to calculate the uncertainty.
 
-There is a closed-form formula `Welch's t-test` for `mean` to calculate CI. But the above two arguments about `mean` is still valid here. So we continue with median for deltas.
-
-Hodges-Lehmann CI is a CI for differences between two sets, it calculates the diff of every possible elem pair between two sets to get a `n * n` difference array, then return the median. But it assumes that the two sets have the identical shape and only different in location shift. With 10, 20 or 30 samples, it's even hard to define a shape.
-
-Bootstrapping drops the shape assumptions.  
-
-CI is presented in `point estimate, % CI [low, hi]`, where point est is `median delta`.
+- The above two arguments about `mean` is still valid here. So we continue with median for deltas.
+- Hodges-Lehmann CI is a CI for differences between two sets, it calculates the diff of every possible elem pair between two sets to get a `n * n` difference array, then return the median. But it assumes that the two sets have the identical shape and only different in location shift. With 10, 20 or 30 samples, it's even hard to define a shape.
 """
 
 DECOMP_DOC = """

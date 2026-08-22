@@ -5,7 +5,6 @@ target_sources(ts_engine PRIVATE
         # Compiler doesnt compile headers directly; hpp files get pulled via #include from cpp files
         # So listing hpp files just cosmetic
         engine.hpp
-        engine.cpp
         book_summary.hpp
         book/order_book.hpp
         book/order_book.cpp
